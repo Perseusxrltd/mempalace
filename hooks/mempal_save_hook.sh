@@ -81,10 +81,10 @@ fi
 
 # Count human messages in the JSONL transcript
 if [ -f "$TRANSCRIPT_PATH" ]; then
-    EXCHANGE_COUNT=$(python3 -c "
+    EXCHANGE_COUNT=$(python3 - "$TRANSCRIPT_PATH" <<'PYEOF'
 import json, sys
 count = 0
-with open('$TRANSCRIPT_PATH') as f:
+with open(sys.argv[1]) as f:
     for line in f:
         try:
             entry = json.loads(line)
@@ -98,7 +98,8 @@ with open('$TRANSCRIPT_PATH') as f:
         except:
             pass
 print(count)
-" 2>/dev/null)
+PYEOF
+2>/dev/null)
 else
     EXCHANGE_COUNT=0
 fi
