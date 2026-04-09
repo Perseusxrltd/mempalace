@@ -1,0 +1,77 @@
+[
+  {
+    "query": "molthub auth whoami --json",
+    "expected_id": "drawer_projects_general_a9cb9a5992ea9e8e",
+    "category": "Code/CLI Command"
+  },
+  {
+    "query": "MoltHub Agent Operating Contract (SKILL)",
+    "expected_id": "drawer_projects_general_64aae426a2253510",
+    "category": "Heading/Protocol"
+  },
+  {
+    "query": "molthub local validate character limits",
+    "expected_id": "drawer_projects_general_ce0e271c9aa5b927",
+    "category": "Technical Detail"
+  },
+  {
+    "query": "molthub sync trigger --id <artifact-uuid>",
+    "expected_id": "drawer_projects_general_7e163908b9ebc6fa",
+    "category": "Command Template"
+  },
+  {
+    "query": "NOT a code host, NOT a PM suite",
+    "expected_id": "drawer_projects_general_07be6744d06c291e",
+    "category": "Product Definition"
+  },
+  {
+    "query": "Automated Sync metadata from GitHub",
+    "expected_id": "drawer_projects_general_388ca9dd293768bd",
+    "category": "Logic/Workflow"
+  },
+  {
+    "query": "6Kfz8wLdewY3k4UDYkFNPZPudACub9wzkxf2xziDoSzU",
+    "expected_id": "drawer_sessions_planning_f8f751d7719b14e8",
+    "category": "Technical/Mint Address"
+  },
+  {
+    "query": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+    "expected_id": "drawer_sessions_planning_9e319645cf95f73e",
+    "category": "Technical/Program ID"
+  },
+  {
+    "query": "premium-analysis.ts fail closed",
+    "expected_id": "drawer_sessions_planning_778530a442cbabed",
+    "category": "Logic/Security"
+  },
+  {
+    "query": "Article 50 labeling duties",
+    "expected_id": "drawer_projects_general_826e9483ab50cc49",
+    "category": "Regulatory/Context"
+  },
+  {
+    "query": "veGrid 4NWkSvbsms4tea4Zn2fQcJ72Hqam15m3MyGtPpPncxeC",
+    "expected_id": "drawer_0126cb43_ed8f_44ea_902e_9d5f2cedf0b1_technical_57d0df050c15b580",
+    "category": "Technical/Relationship"
+  },
+  {
+    "query": "grid-admin dashboard",
+    "expected_id": "drawer_sessions_planning_f7706d57e20417b8",
+    "category": "Grid/Admin"
+  },
+  {
+    "query": "grid-interface src/lib",
+    "expected_id": "drawer_sessions_planning_602012354c6738c6",
+    "category": "Grid/Interface"
+  },
+  {
+    "query": "transferHook PENDING_DEPLOY",
+    "expected_id": "drawer_sessions_planning_a3be18f22a984354",
+    "category": "Grid/Core"
+  },
+  {
+    "query": "Sovereign Swarm",
+    "expected_id": "drawer_projects_general_08a563dc0561fec3",
+    "category": "Old Org Name"
+  }
+]

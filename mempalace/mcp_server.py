@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MemPalace MCP Server — read/write palace access for Claude Code
+MemPalace MCP Server — read/write palace access for AI agents
 ================================================================
 Install: claude mcp add mempalace -- python -m mempalace.mcp_server
 
@@ -9,7 +9,7 @@ Tools (read):
   mempalace_list_wings      — all wings with drawer counts
   mempalace_list_rooms      — rooms within a wing
   mempalace_get_taxonomy    — full wing → room → count tree
-  mempalace_search          — semantic search, optional wing/room filter
+  mempalace_search          — hybrid search (vector + lexical)
   mempalace_check_duplicate — check if content already exists before filing
 
 Tools (write):
@@ -21,17 +21,20 @@ import sys
 import json
 import logging
 import hashlib
+import sqlite3
 from datetime import datetime
 
 from .config import MempalaceConfig
 from .version import __version__
 from .searcher import search_memories
 from .palace_graph import traverse, find_tunnels, graph_stats
-import chromadb
-
 from .knowledge_graph import KnowledgeGraph
+from .hybrid_searcher import HybridSearcher
 
 _kg = KnowledgeGraph()
+_hybrid = HybridSearcher()
+
+import chromadb
 
 logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
 logger = logging.getLogger("mempalace_mcp")
@@ -171,13 +174,8 @@ def tool_get_taxonomy():
 
 
 def tool_search(query: str, limit: int = 5, wing: str = None, room: str = None):
-    return search_memories(
-        query,
-        palace_path=_config.palace_path,
-        wing=wing,
-        room=room,
-        n_results=limit,
-    )
+    """Hybrid search tool handler."""
+    return _hybrid.search(query, wing=wing, room=room, n_results=limit)
 
 
 def tool_check_duplicate(content: str, threshold: float = 0.9):
@@ -250,7 +248,7 @@ def tool_graph_stats():
 def tool_add_drawer(
     wing: str, room: str, content: str, source_file: str = None, added_by: str = "mcp"
 ):
-    """File verbatim content into a wing/room. Checks for duplicates first."""
+    """File verbatim content into a wing/room. Checks for duplicates and indexes in both stores."""
     col = _get_collection(create=True)
     if not col:
         return _no_palace()
@@ -267,6 +265,7 @@ def tool_add_drawer(
     drawer_id = f"drawer_{wing}_{room}_{hashlib.md5((content[:100] + datetime.now().isoformat()).encode()).hexdigest()[:16]}"
 
     try:
+        # 1. Add to ChromaDB (Semantic)
         col.add(
             ids=[drawer_id],
             documents=[content],
@@ -281,6 +280,16 @@ def tool_add_drawer(
                 }
             ],
         )
+
+        # 2. Add to SQLite FTS5 (Lexical Mirror)
+        conn = sqlite3.connect(_hybrid.kg_path)
+        conn.execute(
+            "INSERT INTO drawers_fts (drawer_id, content, wing, room) VALUES (?, ?, ?, ?)",
+            (drawer_id, content, wing, room)
+        )
+        conn.commit()
+        conn.close()
+
         logger.info(f"Filed drawer: {drawer_id} → {wing}/{room}")
         return {"success": True, "drawer_id": drawer_id, "wing": wing, "room": room}
     except Exception as e:
@@ -288,7 +297,7 @@ def tool_add_drawer(
 
 
 def tool_delete_drawer(drawer_id: str):
-    """Delete a single drawer by ID."""
+    """Delete a single drawer by ID from both stores."""
     col = _get_collection()
     if not col:
         return _no_palace()
@@ -296,7 +305,15 @@ def tool_delete_drawer(drawer_id: str):
     if not existing["ids"]:
         return {"success": False, "error": f"Drawer not found: {drawer_id}"}
     try:
+        # 1. Delete from Chroma
         col.delete(ids=[drawer_id])
+
+        # 2. Delete from FTS5
+        conn = sqlite3.connect(_hybrid.kg_path)
+        conn.execute("DELETE FROM drawers_fts WHERE drawer_id = ?", (drawer_id,))
+        conn.commit()
+        conn.close()
+
         logger.info(f"Deleted drawer: {drawer_id}")
         return {"success": True, "drawer_id": drawer_id}
     except Exception as e:

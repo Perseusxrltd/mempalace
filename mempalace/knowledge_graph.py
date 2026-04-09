@@ -82,6 +82,15 @@ class KnowledgeGraph:
             CREATE INDEX IF NOT EXISTS idx_triples_object ON triples(object);
             CREATE INDEX IF NOT EXISTS idx_triples_predicate ON triples(predicate);
             CREATE INDEX IF NOT EXISTS idx_triples_valid ON triples(valid_from, valid_to);
+
+            -- Lexical Mirror for Hybrid Search
+            CREATE VIRTUAL TABLE IF NOT EXISTS drawers_fts USING fts5(
+                drawer_id UNINDEXED,
+                content,
+                wing,
+                room,
+                tokenize='porter'
+            );
         """)
         conn.commit()
         conn.close()
