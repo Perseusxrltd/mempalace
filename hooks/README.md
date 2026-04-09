@@ -1,19 +1,90 @@
 # MemPalace Hooks — Auto-Save for Terminal AI Tools
 
-These hook scripts make MemPalace save automatically. No manual "save" commands needed.
+These hooks make MemPalace save automatically. Two modes available: AI-assisted (original) and direct Python extraction (new, recommended).
 
-## What They Do
+---
+
+## Hook Comparison
+
+| | `mempal_save_hook.sh` | `mempal_save_hook.py` |
+|---|---|---|
+| **Method** | Blocks AI, asks it to save | Extracts directly, never blocks |
+| **Requires AI cooperation** | Yes | No |
+| **Interrupts conversation** | Yes (once per N messages) | Never |
+| **Memory quality** | High (AI understands context) | Good (pattern-based: decisions, preferences, milestones) |
+| **Speed** | Slow (AI round-trip) | Fast (<100ms) |
+| **Recommended for** | Rich, contextual saves | Continuous background extraction |
+
+Use the Python hook for always-on extraction, and the shell hook when you want the AI to do a deep, structured save.
+
+---
+
+## Hook 1 — Python Direct Extraction (Recommended)
+
+**`mempal_save_hook.py`** — extracts memories from the transcript without AI involvement.
+
+### What it does
+
+Every N exchanges (default: 3), it:
+1. Reads the JSONL transcript
+2. Runs `general_extractor.py` (pattern-based, no LLM, no API key)
+3. Saves matched memories to ChromaDB with SHA1-based dedup
+4. Triggers `SyncMemories.ps1` (git commit + push) in the background
+5. Outputs `{}` — never blocks the conversation
+
+### Install — Claude Code
+
+Add to `.claude/settings.local.json`:
+
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /absolute/path/to/hooks/mempal_save_hook.py",
+        "timeout": 15
+      }]
+    }]
+  }
+}
+```
+
+### Configuration
+
+Edit the top of `mempal_save_hook.py`:
+
+```python
+SAVE_INTERVAL = 3           # exchanges between auto-saves
+MEMPALACE_SRC = "~/projects/mempalace"   # path to this repo
+SYNC_SCRIPT   = "~/.mempalace/SyncMemories.ps1"   # auto-sync script (optional)
+```
+
+Set `SYNC_SCRIPT = ""` to disable git sync (saves only, no push).
+
+### Memory types extracted
+
+| Type | Example pattern |
+|------|----------------|
+| `decision` | "decided to", "going with", "we'll use" |
+| `preference` | "prefer", "like", "hate", "always use" |
+| `milestone` | "finished", "deployed", "shipped", "completed" |
+| `problem` | "bug", "issue", "broken", "failing" |
+| `emotional` | "frustrated", "excited", "worried", "happy" |
+
+---
+
+## Hook 2 — AI-Assisted Save (Shell, Original)
+
+**`mempal_save_hook.sh`** — blocks the AI every N messages and asks it to file memories.
 
 | Hook | When It Fires | What Happens |
 |------|--------------|-------------|
-| **Save Hook** | Every 15 human messages | Blocks the AI, tells it to save key topics/decisions/quotes to the palace |
-| **PreCompact Hook** | Right before context compaction | Emergency save — forces the AI to save EVERYTHING before losing context |
+| **Save Hook** | Every 15 human messages | Blocks AI, tells it to save key topics/decisions/quotes |
+| **PreCompact Hook** | Right before context compaction | Emergency save — forces the AI to save EVERYTHING |
 
-The AI does the actual filing — it knows the conversation context, so it classifies memories into the right wings/halls/closets. The hooks just tell it WHEN to save.
-
-## Install — Claude Code
-
-Add to `.claude/settings.local.json`:
+### Install — Claude Code
 
 ```json
 {
@@ -42,7 +113,7 @@ Make them executable:
 chmod +x hooks/mempal_save_hook.sh hooks/mempal_precompact_hook.sh
 ```
 
-## Install — Codex CLI (OpenAI)
+### Install — Codex CLI (OpenAI)
 
 Add to `.codex/hooks.json`:
 
@@ -61,62 +132,13 @@ Add to `.codex/hooks.json`:
 }
 ```
 
-## Configuration
+### Configuration
 
 Edit `mempal_save_hook.sh` to change:
+- **`SAVE_INTERVAL=15`** — messages between saves
+- **`MEMPAL_DIR`** — set to a conversations directory to auto-run `mempalace mine` on each trigger
 
-- **`SAVE_INTERVAL=15`** — How many human messages between saves. Lower = more frequent saves, higher = less interruption.
-- **`STATE_DIR`** — Where hook state is stored (defaults to `~/.mempalace/hook_state/`)
-- **`MEMPAL_DIR`** — Optional. Set to a conversations directory to auto-run `mempalace mine <dir>` on each save trigger. Leave blank (default) to let the AI handle saving via the block reason message.
-
-### mempalace CLI
-
-The relevant commands are:
-
-```bash
-mempalace mine <dir>               # Mine all files in a directory
-mempalace mine <dir> --mode convos # Mine conversation transcripts only
-```
-
-The hooks resolve the repo root automatically from their own path, so they work regardless of where you install the repo.
-
-## How It Works (Technical)
-
-### Save Hook (Stop event)
-
-```
-User sends message → AI responds → Claude Code fires Stop hook
-                                            ↓
-                                    Hook counts human messages in JSONL transcript
-                                            ↓
-                              ┌─── < 15 since last save ──→ echo "{}" (let AI stop)
-                              │
-                              └─── ≥ 15 since last save ──→ {"decision": "block", "reason": "save..."}
-                                                                    ↓
-                                                            AI saves to palace
-                                                                    ↓
-                                                            AI tries to stop again
-                                                                    ↓
-                                                            stop_hook_active = true
-                                                                    ↓
-                                                            Hook sees flag → echo "{}" (let it through)
-```
-
-The `stop_hook_active` flag prevents infinite loops: block once → AI saves → tries to stop → flag is true → we let it through.
-
-### PreCompact Hook
-
-```
-Context window getting full → Claude Code fires PreCompact
-                                        ↓
-                                Hook ALWAYS blocks
-                                        ↓
-                                AI saves everything
-                                        ↓
-                                Compaction proceeds
-```
-
-No counting needed — compaction always warrants a save.
+---
 
 ## Debugging
 
@@ -125,14 +147,37 @@ Check the hook log:
 cat ~/.mempalace/hook_state/hook.log
 ```
 
-Example output:
+Example Python hook output:
 ```
-[14:30:15] Session abc123: 12 exchanges, 12 since last save
-[14:35:22] Session abc123: 15 exchanges, 15 since last save
-[14:35:22] TRIGGERING SAVE at exchange 15
-[14:40:01] Session abc123: 18 exchanges, 3 since last save
+[2026-04-09 14:30:15] Session abc123: 3 exchanges | extracted 2 memories | saved 2 new | types: {'decision', 'preference'}
+[2026-04-09 14:33:22] Session abc123: 6 exchanges | extracted 1 memories | saved 1 new | types: {'milestone'}
+[2026-04-09 14:35:01] Session abc123: 9 exchanges | no memories matched patterns
 ```
 
-## Cost
+---
 
-**Zero extra tokens.** The hooks are bash scripts that run locally. They don't call any API. The only "cost" is the AI spending a few seconds organizing memories at each checkpoint — and it's doing that with context it already has loaded.
+## Using Both Hooks Together
+
+Run the Python hook on `Stop` (always-on, low friction) and the shell PreCompact hook on `PreCompact` (deep save before context loss):
+
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /path/to/hooks/mempal_save_hook.py",
+        "timeout": 15
+      }]
+    }],
+    "PreCompact": [{
+      "hooks": [{
+        "type": "command",
+        "command": "/path/to/hooks/mempal_precompact_hook.sh",
+        "timeout": 30
+      }]
+    }]
+  }
+}
+```

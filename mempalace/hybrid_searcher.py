@@ -18,10 +18,13 @@ import logging
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Set
 
 import chromadb
 from .config import MempalaceConfig
+
+# Statuses excluded from search by default
+_HIDDEN_STATUSES: Set[str] = {"superseded", "historical"}
 
 logger = logging.getLogger("mempalace.hybrid")
 
@@ -100,46 +103,100 @@ class HybridSearcher:
             logger.error(f"Semantic search failed: {e}")
             return []
 
-    def search(self, query: str, wing: Optional[str] = None, room: Optional[str] = None, n_results: int = 5) -> List[Dict[str, Any]]:
+    def _get_trust_map(self, drawer_ids: List[str]) -> Dict[str, Dict]:
+        """Fetch trust records for a batch of drawer_ids. Returns {drawer_id: {status, confidence}}."""
+        if not drawer_ids:
+            return {}
+        try:
+            placeholders = ",".join("?" * len(drawer_ids))
+            conn = sqlite3.connect(self.kg_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"SELECT drawer_id, status, confidence FROM drawer_trust WHERE drawer_id IN ({placeholders})",
+                drawer_ids,
+            ).fetchall()
+            conn.close()
+            return {r["drawer_id"]: {"status": r["status"], "confidence": r["confidence"]} for r in rows}
+        except Exception as e:
+            logger.warning(f"Trust map fetch failed: {e}")
+            return {}
+
+    def search(
+        self,
+        query: str,
+        wing: Optional[str] = None,
+        room: Optional[str] = None,
+        n_results: int = 5,
+        include_superseded: bool = False,
+    ) -> List[Dict[str, Any]]:
         """
         Performs a hybrid search and returns fused, hydrated results.
+        Superseded and historical drawers are filtered out by default.
+        Contested drawers are included but flagged with a warning marker.
         """
-        # 1. Gather candidates from both engines
-        vector_ids = self._vector_search(query, wing, room, limit=50)
-        lexical_ids = self._fts_search(query, wing, room, limit=50)
-        
+        # 1. Gather candidates from both engines (fetch more to allow for trust filtering)
+        fetch_limit = max(50, n_results * 10)
+        vector_ids = self._vector_search(query, wing, room, limit=fetch_limit)
+        lexical_ids = self._fts_search(query, wing, room, limit=fetch_limit)
+
         # 2. Reciprocal Rank Fusion (RRF)
         fused_scores = defaultdict(float)
-        
         for rank, doc_id in enumerate(vector_ids, 1):
             fused_scores[doc_id] += 1.0 / (self.k + rank)
-            
         for rank, doc_id in enumerate(lexical_ids, 1):
             fused_scores[doc_id] += 1.0 / (self.k + rank)
-            
+
         # 3. Rank by fused score
-        top_entries = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)[:n_results]
-        
+        ranked = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+        if not ranked:
+            return []
+
+        all_ids = [doc_id for doc_id, _ in ranked]
+
+        # 4. Trust filter — load trust map and remove hidden statuses
+        trust_map = self._get_trust_map(all_ids)
+        filtered = []
+        for doc_id, score in ranked:
+            trust = trust_map.get(doc_id)
+            if trust:
+                status = trust["status"]
+                if not include_superseded and status in _HIDDEN_STATUSES:
+                    continue
+                # Weight score by confidence
+                confidence = trust.get("confidence", 1.0)
+                filtered.append((doc_id, score * confidence, status, confidence))
+            else:
+                # No trust record yet (pre-backfill) — treat as current
+                filtered.append((doc_id, score, "current", 1.0))
+
+        top_entries = filtered[:n_results]
         if not top_entries:
             return []
-            
-        # 4. Hydrate from the verbatim document store
+
+        # 5. Hydrate from the verbatim document store
         final_ids = [item[0] for item in top_entries]
         data = self.collection.get(ids=final_ids, include=["documents", "metadatas"])
-        
-        doc_map = {idx: (doc, meta) for idx, doc, meta in zip(data["ids"], data["documents"], data["metadatas"])}
-        
+        doc_map = {
+            idx: (doc, meta)
+            for idx, doc, meta in zip(data["ids"], data["documents"], data["metadatas"])
+        }
+
         hits = []
-        for doc_id in final_ids:
+        for doc_id, score, status, confidence in top_entries:
             if doc_id in doc_map:
                 doc, meta = doc_map[doc_id]
-                hits.append({
+                hit = {
                     "id": doc_id,
                     "text": doc,
                     "wing": meta.get("wing", "unknown"),
                     "room": meta.get("room", "unknown"),
                     "source": Path(meta.get("source_file", "?")).name,
-                    "score": round(fused_scores[doc_id], 6)
-                })
-                
+                    "score": round(score, 6),
+                    "trust_status": status,
+                    "confidence": round(confidence, 3),
+                }
+                if status == "contested":
+                    hit["warning"] = "⚠ This memory is contested — accuracy uncertain"
+                hits.append(hit)
+
         return hits

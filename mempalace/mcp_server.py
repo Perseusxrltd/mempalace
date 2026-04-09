@@ -34,6 +34,8 @@ from .searcher import search_memories
 from .palace_graph import traverse, find_tunnels, graph_stats
 from .knowledge_graph import KnowledgeGraph
 from .hybrid_searcher import HybridSearcher
+from .drawer_trust import DrawerTrust
+from . import contradiction_detector as _cd
 
 logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
 logger = logging.getLogger("mempalace_mcp")
@@ -62,9 +64,11 @@ if _args.palace:
     kg_path = os.path.join(os.path.dirname(_config.palace_path), "knowledge_graph.sqlite3")
     _kg = KnowledgeGraph(db_path=kg_path)
     _hybrid = HybridSearcher(palace_path=_config.palace_path, kg_path=kg_path)
+    _trust = DrawerTrust(db_path=kg_path)
 else:
     _kg = KnowledgeGraph()
     _hybrid = HybridSearcher()
+    _trust = DrawerTrust()
 
 
 _client_cache = None
@@ -323,6 +327,13 @@ def tool_add_drawer(
         conn.close()
 
         logger.info(f"Filed drawer: {drawer_id} → {wing}/{room}")
+
+        # Create trust record (idempotent — same drawer_id = same trust row)
+        _trust.create(drawer_id, wing=wing, room=room)
+
+        # Spawn background contradiction detection (daemon thread — never blocks)
+        _cd.spawn_detection(drawer_id, content, wing, room, _trust, _hybrid)
+
         return {"success": True, "drawer_id": drawer_id, "wing": wing, "room": room}
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -346,10 +357,91 @@ def tool_delete_drawer(drawer_id: str):
         conn.commit()
         conn.close()
 
+        # 3. Soft-delete from trust layer (mark historical instead of hard-removing)
+        trust_rec = _trust.get(drawer_id)
+        if trust_rec:
+            _trust.update_status(drawer_id, "historical", reason="drawer deleted", changed_by="mcp")
+
         logger.info(f"Deleted drawer: {drawer_id}")
         return {"success": True, "drawer_id": drawer_id}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# ==================== TRUST TOOLS ====================
+
+
+def tool_trust_stats():
+    """Return trust layer statistics."""
+    return _trust.stats()
+
+
+def tool_verify_drawer(drawer_id: str):
+    """Mark a drawer as verified — bumps confidence by 0.05, max 1.0."""
+    rec = _trust.get(drawer_id)
+    if not rec:
+        return {"error": f"No trust record for {drawer_id}"}
+    return _trust.verify(drawer_id)
+
+
+def tool_challenge_drawer(drawer_id: str, reason: str = ""):
+    """Challenge a drawer's accuracy — lowers confidence by 0.1, min 0.1."""
+    rec = _trust.get(drawer_id)
+    if not rec:
+        return {"error": f"No trust record for {drawer_id}"}
+    result = _trust.challenge(drawer_id)
+    if reason:
+        _trust.update_status(drawer_id, "contested", reason=reason, changed_by="mcp")
+    return result
+
+
+def tool_get_contested():
+    """Return contested drawers — memories with unresolved conflicts. Review these."""
+    return {"contested": _trust.get_contested(limit=20)}
+
+
+def tool_resolve_contest(drawer_id: str, winner_id: str, resolution_note: str = ""):
+    """
+    Manually resolve a contested memory.
+    drawer_id: one of the two conflicting drawers (the contested one).
+    winner_id: the drawer_id that wins (the correct/current version).
+    The other one is marked superseded.
+    """
+    # Determine the loser — it's whichever of the pair is NOT the winner.
+    # Both drawer_id and winner_id must be valid trust records.
+    if drawer_id == winner_id:
+        return {"error": "drawer_id and winner_id must be different drawers"}
+
+    for did in [drawer_id, winner_id]:
+        if not _trust.get(did):
+            return {"error": f"No trust record for {did}"}
+
+    loser_id = drawer_id if winner_id != drawer_id else winner_id
+
+    _trust.update_status(
+        loser_id, "superseded",
+        superseded_by=winner_id,
+        reason=f"manual resolution: {resolution_note}",
+        changed_by="user",
+    )
+    _trust.update_status(
+        winner_id, "current",
+        reason=f"manual resolution winner: {resolution_note}",
+        changed_by="user",
+    )
+
+    # Mark any pending conflicts involving these two as resolved
+    pending = _trust.get_pending_conflicts()
+    for c in pending:
+        if {c["drawer_id_a"], c["drawer_id_b"]} == {drawer_id, winner_id}:
+            _trust.resolve_conflict(c["conflict_id"], winner_id, resolution_note)
+
+    return {
+        "success": True,
+        "winner": winner_id,
+        "loser": loser_id,
+        "resolved_note": resolution_note,
+    }
 
 
 # ==================== KNOWLEDGE GRAPH ====================
@@ -685,7 +777,7 @@ TOOLS = {
         "handler": tool_add_drawer,
     },
     "mempalace_delete_drawer": {
-        "description": "Delete a drawer by ID from both stores. Irreversible.",
+        "description": "Delete a drawer by ID from both stores. Trust record is soft-deleted (marked historical).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -694,6 +786,52 @@ TOOLS = {
             "required": ["drawer_id"],
         },
         "handler": tool_delete_drawer,
+    },
+    "mempalace_trust_stats": {
+        "description": "Trust layer overview — counts by status (current/superseded/contested/historical), avg confidence, pending conflicts.",
+        "input_schema": {"type": "object", "properties": {}},
+        "handler": tool_trust_stats,
+    },
+    "mempalace_verify": {
+        "description": "Verify a drawer as accurate — confirms the memory, bumps confidence.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drawer_id": {"type": "string", "description": "Drawer ID to verify"},
+            },
+            "required": ["drawer_id"],
+        },
+        "handler": tool_verify_drawer,
+    },
+    "mempalace_challenge": {
+        "description": "Challenge a drawer's accuracy. Lowers confidence and marks it contested for review.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drawer_id": {"type": "string", "description": "Drawer ID to challenge"},
+                "reason": {"type": "string", "description": "Why you think this is wrong (optional)"},
+            },
+            "required": ["drawer_id"],
+        },
+        "handler": tool_challenge_drawer,
+    },
+    "mempalace_get_contested": {
+        "description": "Return contested memories — drawers with unresolved conflicts that need review.",
+        "input_schema": {"type": "object", "properties": {}},
+        "handler": tool_get_contested,
+    },
+    "mempalace_resolve_contest": {
+        "description": "Manually resolve a contested memory by picking the winner. The loser is marked superseded.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drawer_id": {"type": "string", "description": "Drawer ID that is contested"},
+                "winner_id": {"type": "string", "description": "Drawer ID of the correct/current version"},
+                "resolution_note": {"type": "string", "description": "Why this one wins (optional)"},
+            },
+            "required": ["drawer_id", "winner_id"],
+        },
+        "handler": tool_resolve_contest,
     },
     "mempalace_diary_write": {
         "description": "Write to your personal agent diary in AAAK format. Your observations, thoughts, what you worked on, what matters. Each agent has their own diary with full history. Write in AAAK for compression — e.g. 'SESSION:2026-04-04|built.palace.graph+diary.tools|ALC.req:agent.diaries.in.aaak|★★★'. Use entity codes from the AAAK spec.",

@@ -35,7 +35,8 @@ See [benchmarks/README.md](benchmarks/README.md) for data download instructions 
 ```
 mempalace/          ← core package (see mempalace/README.md for module guide)
 benchmarks/         ← reproducible benchmark runners
-hooks/              ← Claude Code auto-save hooks
+hooks/              ← Claude Code auto-save hooks (shell + Python)
+sync/               ← palace backup and portability scripts
 examples/           ← usage examples
 tests/              ← test suite
 assets/             ← logo + brand
@@ -68,8 +69,10 @@ Check the [Issues](https://github.com/milla-jovovich/mempalace/issues) tab. Grea
 
 - **New chat formats**: Add import support for Cursor, Copilot, or other AI tool exports
 - **Room detection**: Improve pattern matching in `room_detector_local.py`
-- **Tests**: Increase coverage — especially for `knowledge_graph.py` and `palace_graph.py`
+- **Tests**: Increase coverage — especially for `knowledge_graph.py`, `drawer_trust.py`, `palace_graph.py`
 - **Entity detection**: Better name disambiguation in `entity_detector.py`
+- **Trust UI**: A simple CLI command to review and resolve contested memories
+- **macOS sync**: A `SyncMemories.sh` equivalent of the PowerShell sync script
 - **Docs**: Improve examples, add tutorials
 
 ## Architecture Decisions
@@ -79,7 +82,10 @@ If you're planning a significant change, open an issue first to discuss the appr
 - **Verbatim first**: Never summarize user content. Store exact words.
 - **Local first**: Everything runs on the user's machine. No cloud dependencies.
 - **Zero API by default**: Core features must work without any API key.
-- **Palace structure matters**: Wings, halls, and rooms aren't cosmetic — they drive a 34% retrieval improvement. Respect the hierarchy.
+- **Palace structure matters**: Wings, halls, and rooms aren't cosmetic — they drive real retrieval improvements. Respect the hierarchy.
+- **Never hard-delete memories**: Trust layer uses soft-invalidation (status transitions), not deletion. Audit trails are append-only.
+- **Save can be slow, fetch must be fast**: Trust resolution and contradiction detection happen in background threads at save time. Search reads pre-computed trust state — no LLM calls on the fetch path.
+- **Trust is optional**: The trust layer degrades gracefully — drawers without trust records are treated as `current`. This ensures backwards compatibility with existing palaces.
 
 ## Community
 

@@ -2,135 +2,285 @@
 
 <img src="assets/mempalace_logo.png" alt="MemPalace" width="280">
 
-# MemPalace (PerseusXR High-Fidelity Distribution)
+# MemPalace — PerseusXR High-Fidelity Distribution
 
-### Augmented with Hybrid Lexical-Semantic Retrieval (RRF)
+### Hybrid Retrieval · Memory Trust Layer · Auto-Save · Live Sync
 
 <br>
 
-This is a specialized distribution of MemPalace maintained by **PerseusXR**. It preserves the "Verbatim-First" philosophy of the original project while introducing a structural upgrade to the core retrieval architecture to ensure precision in professional engineering and systems environments.
-
-**Hybrid Retrieval Protocol** — We have augmented the vanilla ChromaDB (Vector) store with a parallel **SQLite FTS5** (Lexical) mirror. By fusing these result sets using the **Reciprocal Rank Fusion (RRF)** algorithm, this version achieves significantly higher accuracy for technical identifiers, symbols, and code snippets.
-
-**Objectively Verified** — This implementation has been benchmarked on a local palace of 4,300+ drawers using a 15-target Gold Standard evaluation set. Results show a **+63.7% improvement** in Mean Reciprocal Rank (MRR) for technical string retrieval.
+This is a specialized distribution of MemPalace maintained by **PerseusXR**. It preserves the verbatim-first philosophy of the original while adding four production-grade layers: hybrid lexical-semantic retrieval, a human-like memory trust lifecycle, AI-independent auto-save hooks, and an automated palace sync system.
 
 <br>
 
 [![][version-shield]][release-link]
 [![][python-shield]][python-link]
 [![][license-shield]][license-link]
-[![][discord-shield]][discord-link]
 
 <br>
 
-[The Contribution](#senior-engineering-contribution) · [Quick Start](#quick-start) · [Benchmarks](#verified-benchmarks) · [MCP Tools](#mcp-server)
+[What We Added](#what-perseusxr-added) · [Quick Start](#quick-start) · [MCP Tools](#mcp-tools) · [Auto-Save Hooks](#auto-save-hooks) · [Palace Sync](#palace-sync) · [Benchmarks](#benchmarks) · [Architecture](#architecture)
 
 </div>
 
 ---
 
-## Senior Engineering Contribution
+## What PerseusXR Added
 
-This fork exists to advance the retrieval fidelity of the MemPalace ecosystem. While the original project provides an excellent foundation for conceptual memory, we observed a "Vector Blur" effect where critical technical symbols were lost in high-dimensional space. 
+The upstream MemPalace is excellent foundational work. This fork addresses four production gaps:
 
-**Our additions to this distribution include:**
+### 1. Hybrid Lexical-Semantic Retrieval (`hybrid_searcher.py`)
 
-1.  **Fused Hybrid Engine (`hybrid_searcher.py`):** A custom retrieval module that orchestrates simultaneous Lexical and Semantic queries.
-2.  **Lexical Mirror (SQLite FTS5):** A structural schema update to `knowledge_graph.py` that indexes every memory drawer for exact keyword matching.
-3.  **RRF Fusion Algorithm:** A mathematical fusion layer that prioritizes exact matches (lexical) without losing conceptual context (semantic).
-4.  **Dual-Indexing Middleware:** Updates to `mcp_server.py` to ensure atomic writes to both data stores for all incoming AI memories.
-5.  **Formal Evaluation Suite (`/eval`):** A verifiable benchmarking framework including a Gold Standard dataset and an automated researcher tool.
+Vector search alone has a "Vector Blur" problem: exact technical identifiers (git hashes, function signatures, hex addresses) carry low semantic weight and get outranked by thematically related but wrong results.
 
----
+We added a **SQLite FTS5 lexical mirror** alongside ChromaDB, and fuse both result sets using **Reciprocal Rank Fusion (RRF)**. Benchmarked result:
 
-## Verified Benchmarks
+| Metric | Vector Only | Hybrid RRF | Improvement |
+|--------|-------------|------------|-------------|
+| Mean Reciprocal Rank (MRR) | 0.5395 | 0.8833 | **+63.7%** |
+| Hit@1 Accuracy | 46.7% | 80.0% | **+33.3%** |
 
-We believe in empirical proof. The following metrics were recorded on a production-density memory palace (4,344 drawers) comparing the **Vanilla Baseline** (Vector-only) with this **High-Fidelity Fork** (Hybrid RRF):
+*4,344-drawer production palace, 15-target Gold Standard. Reproduce: `python eval/benchmark.py`*
 
-| Metric | Vector Only (Baseline) | Hybrid (RRF) | Delta |
-|---|---|---|---|
-| **Mean Reciprocal Rank (MRR)** | 0.5395 | 0.8833 | **+63.7%** |
-| **Hit@1 Accuracy** | 46.7% | 80.0% | **+33.3%** |
+### 2. Memory Trust Layer (`drawer_trust.py` + `contradiction_detector.py`)
 
-*To reproduce these results, run `python eval/benchmark.py` in this repository.*
+Human memory has a lifecycle — beliefs get superseded, contradicted, verified. Without this, an AI memory system accumulates conflicting facts indefinitely.
 
----
+Every drawer now has a **trust record**:
 
-## Why this fork exists
+```
+current → superseded   (newer fact wins — old one is kept but excluded from search)
+current → contested    (conflict detected — surfaces with ⚠ warning in search)
+contested → resolved   (AI or user picks the winner)
+any → historical       (drawer deleted — ghost record remains for audit)
+```
 
-In high-entropy technical environments (Cryptography, Systems Architecture, Large-scale Refactoring), AI agents must be able to retrieve exact, non-semantic identifiers like:
-- Git Commit Hashes (`e8c6ed0`)
-- Memory Addresses or Hex Keys (`0x8004...`)
-- Case-Sensitive Function Signatures (`verifyAgentKey`)
+**Contradiction detection runs in the background** when a new drawer is saved:
 
-Standard vector-based RAG often fails these "Hard Tests" because identifiers possess low semantic weight. This fork provides the structural **Lexical Anchor** required for these tasks.
+- **Stage 1**: Fast LLM judge — compares new drawer against top-k similar existing drawers. Auto-resolves if confidence ≥ 0.8.
+- **Stage 2**: For ambiguous cases — pulls additional palace context, second LLM pass to resolve.
+
+Save speed: unchanged (detection is async, daemon threads). Fetch speed: improved (superseded memories excluded by default, confidence weights scores).
+
+Uses a local vLLM-served model. No cloud calls, no API key.
+
+### 3. AI-Independent Auto-Save Hook (`hooks/mempal_save_hook.py`)
+
+The original hook asks the AI to save memories at intervals — which means it depends on the AI cooperating. We replaced it with a Python hook that:
+
+- Reads the transcript directly
+- Extracts memories via `general_extractor.py` (pure patterns, no LLM)
+- Saves to ChromaDB with hash-based dedup
+- Triggers a git sync in the background
+- **Always outputs `{}` — never blocks the AI, never interrupts the conversation**
+
+Covers: decisions, preferences, milestones, problems, emotional notes.
+
+### 4. Palace Sync (`sync/SyncMemories.ps1`)
+
+The ChromaDB palace is ~860MB — too large for git. The sync system:
+
+1. Exports all drawer content to `archive/drawers_export.json` (~24MB)
+2. Commits and pushes the JSON to your private memory repo
+3. Runs automatically via Task Scheduler (Windows) or cron (macOS/Linux)
+
+On a new machine: `git clone <repo>` → `mempalace mine archive/drawers_export.json` → full palace restored.
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install this high-fidelity fork
+# Install
 pip install .
 
-# Setup and Mining (standard MemPalace commands)
+# Initialize and mine a project
 mempalace init ~/projects/myapp
 mempalace mine ~/projects/myapp
 
-# Search with High-Fidelity Precision
+# Search with high-fidelity precision
 mempalace search "0x8004210B"
+
+# Add the MCP server to Claude Code
+claude mcp add mempalace -- python -m mempalace.mcp_server
+```
+
+**First conversation with Claude Code:**
+Call `mempalace_status` to load the palace overview and get oriented. The server teaches Claude the AAAK dialect automatically.
+
+---
+
+## MCP Tools
+
+The MCP server exposes 24 tools across four categories.
+
+### Read
+
+| Tool | What it does |
+|------|-------------|
+| `mempalace_status` | Palace overview — drawer counts, wing breakdown, AAAK spec |
+| `mempalace_list_wings` | All wings with drawer counts |
+| `mempalace_list_rooms` | Rooms within a wing |
+| `mempalace_get_taxonomy` | Full wing → room → count tree |
+| `mempalace_get_aaak_spec` | Get the AAAK compressed memory dialect spec |
+| `mempalace_search` | Hybrid search (vector + lexical RRF). Filters out superseded memories. Flags contested with ⚠ |
+| `mempalace_check_duplicate` | Check if content already exists before filing |
+
+### Write
+
+| Tool | What it does |
+|------|-------------|
+| `mempalace_add_drawer` | File content into a wing/room. Creates trust record + spawns background contradiction detection |
+| `mempalace_delete_drawer` | Soft-delete a drawer (trust record marked `historical`, never hard-removed) |
+
+### Knowledge Graph
+
+| Tool | What it does |
+|------|-------------|
+| `mempalace_kg_query` | Query entity relationships with optional temporal filter |
+| `mempalace_kg_add` | Add a typed fact (subject → predicate → object, with valid_from) |
+| `mempalace_kg_invalidate` | Mark a fact as no longer true |
+| `mempalace_kg_timeline` | Chronological fact history for an entity |
+| `mempalace_kg_stats` | Knowledge graph overview |
+| `mempalace_traverse` | Walk the palace graph from a room — find connected ideas |
+| `mempalace_find_tunnels` | Rooms that bridge two wings |
+| `mempalace_graph_stats` | Graph topology overview |
+
+### Trust
+
+| Tool | What it does |
+|------|-------------|
+| `mempalace_trust_stats` | Trust layer overview — counts by status, avg confidence, pending conflicts |
+| `mempalace_verify` | Confirm a drawer is accurate (+0.05 confidence) |
+| `mempalace_challenge` | Flag a drawer as suspect (−0.1 confidence, marks contested) |
+| `mempalace_get_contested` | List unresolved contested memories for review |
+| `mempalace_resolve_contest` | Manually pick the winner of a conflict |
+
+### Agent Diary
+
+| Tool | What it does |
+|------|-------------|
+| `mempalace_diary_write` | Write a diary entry in AAAK format — agent's personal journal |
+| `mempalace_diary_read` | Read recent diary entries |
+
+---
+
+## Auto-Save Hooks
+
+Two hooks are included. Use the Python hook for always-on extraction; combine with the shell PreCompact hook for deep saves before context compaction.
+
+**Python hook (recommended — never blocks):**
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 /path/to/hooks/mempal_save_hook.py",
+        "timeout": 15
+      }]
+    }]
+  }
+}
+```
+
+See [hooks/README.md](hooks/README.md) for full installation, Codex CLI setup, and configuration options.
+
+---
+
+## Palace Sync
+
+Automatic hourly backup to a private git repo. Works across machines.
+
+**Setup (Windows):**
+```powershell
+# Copy sync script
+Copy-Item sync/SyncMemories.ps1 $env:USERPROFILE\.mempalace\
+
+# Schedule hourly sync
+$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument "-NonInteractive -WindowStyle Hidden -File $env:USERPROFILE\.mempalace\SyncMemories.ps1"
+$trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Hours 1) -Once -At (Get-Date)
+Register-ScheduledTask -TaskName "MemPalaceMemorySync" -Action $action -Trigger $trigger -RunLevel Highest -Force
+```
+
+**Restore on new machine:**
+```bash
+git clone https://github.com/YOUR_USERNAME/personal-ai-memories ~/.mempalace
+cd ~/.mempalace
+py -m mempalace mine archive/drawers_export.json
+py ~/.mempalace/backfill_trust.py
+```
+
+See [sync/README.md](sync/README.md) for full details including macOS/Linux cron setup.
+
+---
+
+## Architecture
+
+```
+User → CLI → miner/convo_miner ─────────────────┐
+                                                  ↓
+                                        ChromaDB palace (vectors)
+                                        FTS5 mirror (lexical)
+                                        drawer_trust (status/confidence)
+                                                  ↕
+Auto-save hook → general_extractor ──────────────┘
+                                         ↑ trust.create()
+                                         ↑ contradiction_detector (background thread)
+                                                  ↕
+MCP Server → hybrid_searcher → trust-filtered, confidence-weighted results
+           → kg tools        → entity facts, temporal queries
+           → trust tools     → verify / challenge / resolve
+           → diary           → agent journal
+                                                  ↕
+Task Scheduler → SyncMemories.ps1 → archive/drawers_export.json → git push
+```
+
+**Storage layout:**
+```
+~/.mempalace/
+├── palace/                   ← ChromaDB (vectors, ~860MB, git-ignored)
+├── knowledge_graph.sqlite3   ← KG triples + FTS5 + trust tables (git-ignored)
+├── archive/
+│   └── drawers_export.json   ← portable JSON export (~24MB, committed to git)
+├── hooks/
+│   └── mempal_save_hook.py   ← Python auto-save hook
+└── SyncMemories.ps1          ← hourly sync script
 ```
 
 ---
 
-*(The documentation below is the original project guide by Milla Jovovich & Ben Sigman)*
+## Benchmarks
+
+Benchmarks and a full reproduction suite are in `/benchmarks` and `/eval`.
+
+```bash
+# Reproduce the RRF benchmark
+python eval/benchmark.py
+
+# Full LongMemEval benchmark (500 questions)
+python benchmarks/longmemeval_bench.py /path/to/longmemeval_s_cleaned.json
+```
+
+The upstream project's **96.6% R@5 on LongMemEval** (raw mode) is real and independently reproduced. AAAK mode trades ~12 points of recall for token density — use raw mode for maximum accuracy.
 
 ---
 
-## A Note from Milla & Ben — April 7, 2026
+## A Note from the Original Authors
 
-> The community caught real problems in this README within hours of launch and we want to address them directly.
->
-> **What we got wrong:**
->
-> - **The AAAK token example was incorrect.** We used a rough heuristic (`len(text)//3`) for token counts instead of an actual tokenizer. Real counts via OpenAI's tokenizer: the English example is 66 tokens, the AAAK example is 73. AAAK does not save tokens at small scales — it's designed for *repeated entities at scale*, and the README example was a bad demonstration of that. We're rewriting it.
->
-> - **"30x lossless compression" was overstated.** AAAK is a lossy abbreviation system (entity codes, sentence truncation). Independent benchmarks show AAAK mode scores **84.2% R@5 vs raw mode's 96.6%** on LongMemEval — a 12.4 point regression. The honest framing is: AAAK is an experimental compression layer that trades fidelity for token density, and **the 96.6% headline number is from RAW mode, not AAAK**.
->
-> - **"+34% palace boost" was misleading.** That number compares unfiltered search to wing+room metadata filtering. Metadata filtering is a standard ChromaDB feature, not a novel retrieval mechanism. Real and useful, but not a moat.
->
-> - **"Contradiction detection"** exists as a separate utility (`fact_checker.py`) but is not currently wired into the knowledge graph operations as the README implied.
->
-> - **"100% with Haiku rerank"** is real (we have the result files) but the rerank pipeline is not in the public benchmark scripts. We're adding it.
->
-> **What's still true and reproducible:**
->
-> - **96.6% R@5 on LongMemEval in raw mode**, on 500 questions, zero API calls — independently reproduced on M2 Ultra in under 5 minutes by [@gizmax](https://github.com/milla-jovovich/mempalace/issues/39).
-> - Local, free, no subscription, no cloud, no data leaving your machine.
-> - The architecture (wings, rooms, closets, drawers) is real and useful, even if it's not a magical retrieval boost.
->
-> **What we're doing:**
->
-> 1. Rewriting the AAAK example with real tokenizer counts and a scenario where AAAK actually demonstrates compression
-> 2. Adding `mode raw / aaak / rooms` clearly to the benchmark documentation so the trade-offs are visible
-> 3. Wiring `fact_checker.py` into the KG ops so the contradiction detection claim becomes true
-> 4. Pinning ChromaDB to a tested range (Issue #100), fixing the shell injection in hooks (#110), and addressing the macOS ARM64 segfault (#74)
->
-> **Thank you to everyone who poked holes in this.** Brutal honest criticism is exactly what makes open source work, and it's what we asked for. Special thanks to [@panuhorsmalahti](https://github.com/milla-jovovich/mempalace/issues/43), [@lhl](https://github.com/milla-jovovich/mempalace/issues/27), [@gizmax](https://github.com/milla-jovovich/mempalace/issues/39), and everyone who filed an issue or a PR in the first 48 hours. We're listening, we're fixing, and we'd rather be right than impressive.
->
-> — *Milla Jovovich & Ben Sigman*
+> *See the [honest README correction](https://github.com/milla-jovovich/mempalace#a-note-from-milla--ben--april-7-2026) from Milla Jovovich & Ben Sigman for context on the original project's benchmark claims and corrections.*
 
 ---
 
-## The Palace
-... (rest of the original guide)
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 <!-- Link Definitions -->
-[version-shield]: https://img.shields.io/badge/version-3.0.0-4dc9f6?style=flat-square&labelColor=0a0e14
-[release-link]: https://github.com/milla-jovovich/mempalace/releases
+[version-shield]: https://img.shields.io/badge/version-3.1.0-4dc9f6?style=flat-square&labelColor=0a0e14
+[release-link]: https://github.com/Perseusxrltd/mempalace/releases
 [python-shield]: https://img.shields.io/badge/python-3.9+-7dd8f8?style=flat-square&labelColor=0a0e14&logo=python&logoColor=7dd8f8
 [python-link]: https://www.python.org/
 [license-shield]: https://img.shields.io/badge/license-MIT-b0e8ff?style=flat-square&labelColor=0a0e14
-[license-link]: https://github.com/milla-jovovich/mempalace/blob/main/LICENSE
-[discord-shield]: https://img.shields.io/badge/discord-join-5865F2?style=flat-square&labelColor=0a0e14&logo=discord&logoColor=5865F2
-[discord-link]: https://discord.com/invite/ycTQQCu6kn
+[license-link]: https://github.com/Perseusxrltd/mempalace/blob/main/LICENSE
