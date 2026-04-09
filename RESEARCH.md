@@ -143,3 +143,73 @@ A standalone script that processes all historical AI conversation logs (Claude J
 Used to bootstrap a palace from months of prior conversation history. Not a real-time tool — run once, or periodically on new log dumps.
 
 Output: `distilled` wing, rooms: `decision | preference | project_fact | tech_fact | milestone | personal`.
+
+---
+
+## Contribution 5: Intelligent LLM Lifecycle — `ManagedBackend` (v3.2)
+
+### Problem
+
+Local LLM servers (vLLM, Ollama) for contradiction detection require manual startup. On Windows + WSL, this is particularly awkward — the server lives in a different OS, and the Python process that spawns it must not own the server's lifetime. If the parent dies, the server should keep running.
+
+### Design
+
+`ManagedBackend` (in `llm_backend.py`) extends `OpenAICompatBackend` with three lifecycle behaviors:
+
+**1. Auto-start on demand**
+When `chat()` is called and `ping()` fails, `ensure_running()`:
+1. Parses `start_script` from config (`wsl:///path/script.sh` or `/native/path/script.sh`)
+2. For WSL scripts: calls `subprocess.Popen(['wsl.exe', '-d', distro, '-e', 'bash', script])` with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` flags — the server lives at Windows process level, survives shell exit
+3. Polls `ping()` up to `startup_timeout` (default: 90s)
+
+**2. Auto-stop on idle**
+A daemon watcher thread checks every 30s. If `_last_chat_time` exceeds `idle_timeout` (default: 5 min), calls `stop()` — terminates the subprocess gracefully.
+
+**3. Auto-restart on failure**
+`_fail_count` is incremented on each consecutive `chat()` error. At 3 failures, `_restart()` = `stop()` + `_launch()` + `ping()` wait.
+
+### Key design decision: process independence
+
+`DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` (Windows) ensures the vLLM server is not a child of the Python process — it's an independent OS-level process. When mempalace exits (or the MCP server restarts), the server keeps running. Only `backend.stop()` or a manual kill terminates it.
+
+This matters for the auto-stop feature: the server is shared state across all processes using the palace.
+
+---
+
+## Contribution 6: Behavioral Protocol Bootstrap (v3.2)
+
+### Problem
+
+Storage is not memory. An AI connected to a MemPalace MCP server has 24 tools available — but without explicit instructions, it will not call them. The behavioral gap between "having tools" and "using tools correctly" is the real problem for AI memory systems.
+
+Specifically: the palace's behavioral protocol (when to call `status`, when to search, when to save, when to write the diary) was only returned *inside* the `tool_status` result — a circular dependency where the AI needed to already know to call the tool before it could receive the instruction to call the tool.
+
+### Solution: three independent layers
+
+Each layer solves the bootstrap independently. A client needs only one to work correctly.
+
+**Layer 1 — MCP tool descriptions (universal)**
+
+Every MCP client reads tool descriptions before taking any action. We changed:
+- `mempalace_status` → "CALL THIS FIRST at every session start. Returns your behavioral protocol, AAAK memory dialect spec, and palace overview."
+- `mempalace_search` → "Use BEFORE answering any question about past events, people, projects — verify, don't guess."
+- `mempalace_add_drawer` → "Call when you learn a new fact or something changes."
+- `mempalace_diary_write` → "Call AT END OF EVERY SESSION."
+- `mempalace_kg_query` → "Use BEFORE answering questions about specific entities."
+
+**Layer 2 — MCP `prompts` capability**
+
+The MCP protocol supports a `prompts` capability. We register a named prompt `mempalace_protocol` that returns the full behavioral rules + AAAK spec as an injectable message. Clients that support `prompts/get` receive the complete protocol before any tool call.
+
+**Layer 3 — `SYSTEM_PROMPT.md`**
+
+A copy-paste template for every major AI platform:
+- Claude Code: `~/.claude/CLAUDE.md` (read at every session start, before tools load)
+- Cursor: `.cursorrules` or global rules
+- Claude.ai Projects: Project Instructions
+- ChatGPT: Custom Instructions
+- Gemini: `system_instruction` at chat init
+
+### Why CLAUDE.md is the most reliable layer for Claude Code
+
+Claude Code reads `~/.claude/CLAUDE.md` before any conversation starts — before tools are listed, before MCP servers connect. This means the protocol is injected even in sessions where something goes wrong with the MCP connection. It's the only truly zero-dependency bootstrap path for Claude Code.

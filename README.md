@@ -18,7 +18,7 @@ This is a specialized distribution of MemPalace maintained by **PerseusXR**. It 
 
 <br>
 
-[What We Added](#what-perseusxr-added) · [Quick Start](#quick-start) · [MCP Tools](#mcp-tools) · [Auto-Save Hooks](#auto-save-hooks) · [Palace Sync](#palace-sync) · [Benchmarks](#benchmarks) · [Architecture](#architecture) · [Changelog](#changelog)
+[What We Added](#what-perseusxr-added) · [Quick Start](#quick-start) · [MCP Tools](#mcp-tools) · [System Prompt](#behavioral-protocol-bootstrap-system_promptmd--mcp-prompts) · [Auto-Save Hooks](#auto-save-hooks) · [Palace Sync](#palace-sync) · [Benchmarks](#benchmarks) · [Architecture](#architecture) · [Changelog](#changelog)
 
 </div>
 
@@ -63,7 +63,36 @@ Save speed: unchanged (detection is async, daemon threads). Fetch speed: improve
 
 Works with any local LLM — configure once with `mempalace llm setup` (Ollama, LM Studio, vLLM, or any OpenAI-compatible endpoint). No cloud calls, no API key. Disable entirely for zero-overhead saves.
 
-### 3. AI-Independent Auto-Save Hook (`hooks/mempal_save_hook.py`)
+### 3. Intelligent LLM Lifecycle (`llm_backend.py` — `ManagedBackend`)
+
+Running a local LLM (vLLM, Ollama, etc.) for contradiction detection shouldn't require manual startup. `ManagedBackend` wraps any OpenAI-compatible server with full lifecycle management:
+
+- **Auto-start on demand** — when contradiction detection fires and the server is down, it starts automatically (WSL or native Linux)
+- **Auto-stop on idle** — after configurable idle timeout (default: 5 minutes), the server shuts down to free GPU memory
+- **Auto-restart on failure** — 3 consecutive chat failures trigger a stop + relaunch + wait cycle
+- **Manual control** — `mempalace llm start` / `mempalace llm stop` for explicit lifecycle management
+
+Configure during setup:
+```bash
+mempalace llm setup
+# → prompts for start_script (e.g. wsl:///home/user/run_vllm.sh), idle_timeout
+```
+
+### 4. Behavioral Protocol Bootstrap (`SYSTEM_PROMPT.md` + MCP prompts)
+
+The hardest problem with AI memory isn't storage — it's ensuring the AI *knows to use it*. Without explicit instructions, an AI connected to mempalace will ignore it entirely.
+
+This fork solves it with three layers:
+
+| Layer | Mechanism | Covers |
+|-------|-----------|--------|
+| **MCP tool descriptions** | `mempalace_status` description says "CALL THIS FIRST" | All MCP clients |
+| **MCP prompts capability** | `prompts/get?name=mempalace_protocol` returns the full behavioral rules | Clients supporting MCP prompts |
+| **`SYSTEM_PROMPT.md`** | Copy-paste template for every major AI platform | Claude Code, Cursor, ChatGPT, Gemini |
+
+The result: any AI connecting to this MCP server receives clear instructions on *when* (startup, before answering, when learning, at session end), *which tool* to call, and *why*.
+
+### 5. AI-Independent Auto-Save Hook (`hooks/mempal_save_hook.py`)
 
 The original hook asks the AI to save memories at intervals — which means it depends on the AI cooperating. We replaced it with a Python hook that:
 
@@ -105,7 +134,14 @@ Then add the MCP server:
 claude mcp add mempalace -- python -m mempalace.mcp_server
 ```
 
-Restart Claude Code. In your first conversation, call `mempalace_status` — it loads the palace overview and teaches the AI the AAAK dialect automatically.
+Then copy the behavioral protocol into your AI's system instructions so it knows to use its memory:
+```bash
+# For Claude Code — copy into your global CLAUDE.md:
+cat SYSTEM_PROMPT.md
+# See SYSTEM_PROMPT.md for Cursor, Claude.ai Projects, ChatGPT, Gemini templates
+```
+
+Restart Claude Code. The AI will automatically call `mempalace_status` on startup, load the AAAK dialect, and follow the memory protocol.
 
 ### Manual / macOS / Linux
 
@@ -148,14 +184,19 @@ mempalace llm status   # show config + ping
 mempalace llm test     # send a test prompt
 ```
 
-**vLLM on WSL** (for GPU users):
+**vLLM on WSL** (for GPU users — auto-start recommended):
 ```bash
 cp sync/run_vllm.sh ~/run_vllm.sh
-bash ~/run_vllm.sh &
-# ~60s to load, then: mempalace llm setup → choose vllm → http://localhost:8000
+# mempalace llm setup → choose vllm → http://localhost:8000
+# → enter start_script: wsl:///home/user/run_vllm.sh
+# → mempalace will auto-start/stop the server as needed
 ```
 
-The Windows installer registers vLLM as a Task Scheduler task that starts on login.
+With `start_script` configured, mempalace starts vLLM on demand (when contradiction detection fires) and stops it after the idle timeout. No manual management needed. You can also control it explicitly:
+```bash
+mempalace llm start   # boot the server now
+mempalace llm stop    # shut it down
+```
 
 ---
 
@@ -325,6 +366,25 @@ The upstream project's **96.6% R@5 on LongMemEval** (raw mode) is real and indep
 
 ## Changelog
 
+### v3.2.7 — Behavioral Protocol Bootstrap + MCP Prompts
+
+The "how does the AI know to use it" problem, solved at every layer:
+
+- **MCP `prompts` capability**: server now advertises `prompts: {}` in `initialize` and handles `prompts/list` + `prompts/get`. Requesting `mempalace_protocol` returns the full behavioral protocol + AAAK spec as an injectable message. Clients that support MCP prompts receive the protocol automatically.
+- **Directive tool descriptions**: `mempalace_status` now reads "CALL THIS FIRST at every session start" — any AI reading the tools list is immediately instructed. Key tools (`search`, `add_drawer`, `kg_query`, `diary_write`) now say *when* to use them, not just *what* they do.
+- **`SYSTEM_PROMPT.md`**: copy-paste template for all major AI platforms — Claude Code `CLAUDE.md`, Cursor `.cursorrules`, Claude.ai Projects, ChatGPT Custom Instructions, Gemini, OpenAI-compatible APIs.
+- **`~/.claude/CLAUDE.md` support**: Claude Code reads this file at every session start, before any tool is available — the most reliable bootstrap for Claude Code users.
+
+### v3.2.5 — Intelligent LLM Lifecycle (`ManagedBackend`)
+
+Local LLM management should be transparent — configure once, never think about it again:
+
+- `ManagedBackend` wraps any OpenAI-compatible server: auto-start on demand, auto-stop after idle timeout, auto-restart on 3 consecutive failures
+- WSL support: `start_script: wsl:///home/user/run_vllm.sh` spawns a Windows-detached process that survives shell exit
+- `mempalace llm start` / `mempalace llm stop` for explicit control
+- Contradiction detector auto-starts the backend if it's down when detection fires
+- `save_llm_config()` extended with `start_script`, `startup_timeout`, `idle_timeout` parameters
+
 ### v3.2.0 — Community Fixes
 
 Eight upstream bugs fixed, sourced from the milla-jovovich/mempalace community:
@@ -356,7 +416,7 @@ Eight upstream bugs fixed, sourced from the milla-jovovich/mempalace community:
 MIT — see [LICENSE](LICENSE).
 
 <!-- Link Definitions -->
-[version-shield]: https://img.shields.io/badge/version-3.2.0-4dc9f6?style=flat-square&labelColor=0a0e14
+[version-shield]: https://img.shields.io/badge/version-3.2.7-4dc9f6?style=flat-square&labelColor=0a0e14
 [release-link]: https://github.com/Perseusxrltd/mempalace/releases
 [python-shield]: https://img.shields.io/badge/python-3.9--3.14-7dd8f8?style=flat-square&labelColor=0a0e14&logo=python&logoColor=7dd8f8
 [python-link]: https://www.python.org/
