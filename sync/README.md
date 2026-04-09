@@ -1,4 +1,19 @@
-# MemPalace Auto-Sync — Palace Backup & Portability
+# MemPalace Sync & Setup
+
+## One-Shot Windows Install
+
+```powershell
+powershell -ExecutionPolicy Bypass -File sync\install_windows.ps1
+```
+
+This installs everything: hooks, hourly sync task, vLLM auto-start, trust backfill. Safe to re-run.
+
+Skip vLLM setup: `install_windows.ps1 -SkipVllm`
+Skip hook setup: `install_windows.ps1 -SkipHook`
+
+---
+
+# Auto-Sync — Palace Backup & Portability
 
 The palace (ChromaDB vector store) is too large for git (~860MB). The sync system exports a portable JSON snapshot and commits that instead. On a new machine, one command rebuilds the full palace from the snapshot.
 

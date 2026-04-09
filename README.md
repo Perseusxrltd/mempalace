@@ -89,23 +89,58 @@ On a new machine: `git clone <repo>` → `mempalace mine archive/drawers_export.
 
 ## Quick Start
 
-```bash
-# Install
+### Windows (one-shot installer)
+
+```powershell
+git clone https://github.com/Perseusxrltd/mempalace
+cd mempalace
 pip install .
 
-# Initialize and mine a project
-mempalace init ~/projects/myapp
-mempalace mine ~/projects/myapp
+# Sets up hooks, Task Scheduler sync, vLLM auto-start, backfills trust records
+powershell -ExecutionPolicy Bypass -File sync\install_windows.ps1
+```
 
-# Search with high-fidelity precision
-mempalace search "0x8004210B"
-
-# Add the MCP server to Claude Code
+Then add the MCP server:
+```bash
 claude mcp add mempalace -- python -m mempalace.mcp_server
 ```
 
-**First conversation with Claude Code:**
-Call `mempalace_status` to load the palace overview and get oriented. The server teaches Claude the AAAK dialect automatically.
+Restart Claude Code. In your first conversation, call `mempalace_status` — it loads the palace overview and teaches the AI the AAAK dialect automatically.
+
+### Manual / macOS / Linux
+
+```bash
+pip install .
+
+# Mine a project or conversation history
+mempalace init ~/projects/myapp
+mempalace mine ~/projects/myapp
+
+# Add MCP server
+claude mcp add mempalace -- python -m mempalace.mcp_server
+
+# Install the auto-save hook (add to .claude/settings.local.json)
+# See hooks/README.md for full instructions
+
+# Backfill trust records for existing drawers
+py sync/backfill_trust.py
+```
+
+### vLLM (contradiction detection — optional but recommended)
+
+Contradiction detection requires a locally running vLLM instance. On WSL Ubuntu:
+
+```bash
+# Copy and start
+cp sync/run_vllm.sh ~/run_vllm.sh
+bash ~/run_vllm.sh &
+
+# Check it loaded (~60 seconds)
+tail -f ~/vllm.log
+# Look for: "Uvicorn running on http://0.0.0.0:8000"
+```
+
+The Windows installer registers this as a Task Scheduler task that starts on login automatically.
 
 ---
 
