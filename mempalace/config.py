@@ -138,7 +138,15 @@ class MempalaceConfig:
         return self._file_config.get("llm", {"backend": "none"})
 
     def save_llm_config(
-        self, backend: str, url: str = "", model: str = "", api_key: str = ""
+        self,
+        backend: str,
+        url: str = "",
+        model: str = "",
+        api_key: str = "",
+        start_script: str = "",
+        startup_timeout: int = 90,
+        idle_timeout: int = 300,
+        wsl_distro: str = "Ubuntu",
     ) -> None:
         """Persist LLM configuration to config.json."""
         self._config_dir.mkdir(parents=True, exist_ok=True)
@@ -149,12 +157,19 @@ class MempalaceConfig:
                     config = json.load(f)
             except (json.JSONDecodeError, OSError):
                 pass
-        config["llm"] = {
+        llm: dict = {
             "backend": backend,
             "url": url,
             "model": model,
             "api_key": api_key or None,
         }
+        if start_script:
+            llm["start_script"] = start_script
+            llm["startup_timeout"] = startup_timeout
+            llm["idle_timeout"] = idle_timeout
+            if wsl_distro and wsl_distro != "Ubuntu":
+                llm["wsl_distro"] = wsl_distro
+        config["llm"] = llm
         with open(self._config_file, "w") as f:
             json.dump(config, f, indent=2)
         self._file_config = config

@@ -20,6 +20,8 @@ Commands:
     mempalace llm setup                   Configure LLM backend (ollama/lmstudio/vllm/custom/none)
     mempalace llm status                  Show current LLM config and ping the endpoint
     mempalace llm test                    Send a test prompt to verify the backend
+    mempalace llm start                   Start the LLM server (requires start_script in config)
+    mempalace llm stop                    Stop the LLM server
 
 Examples:
     mempalace init ~/projects/my_app
@@ -251,7 +253,46 @@ def cmd_llm(args):
                 print("OK")
             else:
                 print("UNREACHABLE")
-                print(f"  Check that {llm_cfg.get('url', '?')} is running.\n")
+                start_script = llm_cfg.get("start_script", "")
+                if start_script:
+                    print("  Auto-start available — run: mempalace llm start\n")
+                else:
+                    print(f"  Check that {llm_cfg.get('url', '?')} is running.\n")
+
+    elif args.llm_action == "start":
+        from .llm_backend import ManagedBackend
+
+        backend = get_backend(config)
+        if isinstance(backend, NullBackend):
+            print("\n  No LLM configured. Run: mempalace llm setup\n")
+            return
+        if not isinstance(backend, ManagedBackend):
+            print(f"\n  {backend.info()}")
+            print("  No start_script configured — start this backend manually.")
+            print("  To enable auto-start, run: mempalace llm setup\n")
+            return
+        if backend.ping():
+            print(f"\n  Already running: {backend.info()}\n")
+            return
+        print(f"\n  Starting {backend.info()} ...")
+        print(f"  (startup timeout: {backend.startup_timeout}s)", flush=True)
+        if backend.ensure_running():
+            print("  Server ready.\n")
+        else:
+            print("  Startup timed out. Check the start_script and try again.\n")
+
+    elif args.llm_action == "stop":
+        from .llm_backend import ManagedBackend
+
+        backend = get_backend(config)
+        if isinstance(backend, NullBackend) or not isinstance(backend, ManagedBackend):
+            print("\n  No managed LLM configured — nothing to stop.\n")
+            return
+        if not backend.ping():
+            print("\n  Already stopped.\n")
+            return
+        backend.stop()
+        print(f"\n  Stopped {backend.info()}\n")
 
     elif args.llm_action == "test":
         backend = get_backend(config)
@@ -274,7 +315,7 @@ def cmd_llm(args):
         _cmd_llm_setup(config, BACKEND_DEFAULTS, BACKEND_LABELS)
 
     else:
-        print("\n  Usage: mempalace llm <setup|status|test>\n")
+        print("\n  Usage: mempalace llm <setup|status|test|start|stop>\n")
 
 
 def _cmd_llm_setup(config, BACKEND_DEFAULTS, BACKEND_LABELS):
@@ -312,8 +353,9 @@ def _cmd_llm_setup(config, BACKEND_DEFAULTS, BACKEND_LABELS):
         return
 
     defaults = BACKEND_DEFAULTS.get(backend_name, {})
-    default_url = config.llm.get("url") or defaults.get("url", "")
-    default_model = config.llm.get("model") or defaults.get("model", "")
+    current_llm = config.llm
+    default_url = current_llm.get("url") or defaults.get("url", "")
+    default_model = current_llm.get("model") or defaults.get("model", "")
 
     print()
     url_prompt = f"  Base URL [{default_url}]: "
@@ -327,9 +369,43 @@ def _cmd_llm_setup(config, BACKEND_DEFAULTS, BACKEND_LABELS):
     if backend_name == "custom":
         api_key = input("  API key (leave blank if none): ").strip()
 
+    # Auto-start / lifecycle config (vllm and custom only)
+    start_script = ""
+    startup_timeout = 90
+    idle_timeout = 300
+    if backend_name in ("vllm", "custom"):
+        print()
+        print("  -- Auto-start / lifecycle (optional) --")
+        print("  Set a start_script to let MemPalace launch the server automatically")
+        print("  when contradiction detection needs it, and stop it when idle.")
+        print("  Examples:")
+        print("    wsl:///home/user/run_vllm.sh    (WSL on Windows)")
+        print("    /home/user/run_vllm.sh          (Linux / macOS)")
+        default_script = current_llm.get("start_script", "")
+        start_script = (
+            input(f"  Start script [{default_script or 'blank = disabled'}]: ").strip()
+            or default_script
+        )
+        if start_script:
+            default_startup = current_llm.get("startup_timeout", 90)
+            raw = input(f"  Startup timeout seconds [{default_startup}]: ").strip()
+            startup_timeout = int(raw) if raw.isdigit() else default_startup
+
+            default_idle_min = current_llm.get("idle_timeout", 300) // 60
+            raw = input(f"  Auto-stop after idle minutes [{default_idle_min}]: ").strip()
+            idle_timeout = (int(raw) * 60) if raw.isdigit() else (default_idle_min * 60)
+
     # Test before saving
     print("\n  Testing connection...", end=" ", flush=True)
-    config.save_llm_config(backend_name, url=url, model=model, api_key=api_key)
+    config.save_llm_config(
+        backend_name,
+        url=url,
+        model=model,
+        api_key=api_key,
+        start_script=start_script,
+        startup_timeout=startup_timeout,
+        idle_timeout=idle_timeout,
+    )
     backend = get_backend(config)
 
     if backend.ping():
@@ -624,6 +700,8 @@ def main():
     llm_sub.add_parser("setup", help="Interactive wizard to choose and configure a backend")
     llm_sub.add_parser("status", help="Show current backend config and ping the endpoint")
     llm_sub.add_parser("test", help="Send a test prompt and verify the backend responds")
+    llm_sub.add_parser("start", help="Start the LLM server (auto-start must be configured)")
+    llm_sub.add_parser("stop", help="Stop the LLM server")
 
     # repair
     sub.add_parser(

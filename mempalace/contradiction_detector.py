@@ -234,10 +234,18 @@ def run_detection_thread(
     global _last_detection_time
 
     # Skip entirely if no LLM configured
-    from .llm_backend import NullBackend
+    from .llm_backend import NullBackend, ManagedBackend
 
-    if isinstance(_get_backend(), NullBackend):
+    backend = _get_backend()
+    if isinstance(backend, NullBackend):
         return
+
+    # Auto-start if the server is down and we have a managed backend
+    if isinstance(backend, ManagedBackend) and not backend.ping():
+        logger.info("LLM backend unreachable — attempting auto-start")
+        if not backend.ensure_running():
+            logger.warning("Auto-start failed — skipping detection for this drawer")
+            return
 
     # Global cooldown
     with _rate_lock:
