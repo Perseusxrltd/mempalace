@@ -21,6 +21,15 @@ VLLM_PORT="${VLLM_PORT:-8000}"
 LOG="${LOG:-$HOME/vllm.log}"
 VLLM_BIN="$HOME/vllm-env/bin/vllm"
 
+# ── Resource limits ───────────────────────────────────────────────────────────
+# GPU: 0.25 → ~8.5GB on a 34GB card. The 4B FP8 model uses ~4GB; rest is KV cache.
+# Raising this makes inference faster but steals VRAM from games/other work.
+GPU_UTIL="${GPU_UTIL:-0.25}"
+# Max concurrent requests. 1 = sequential only, no batching, lowest GPU pressure.
+MAX_SEQS="${MAX_SEQS:-1}"
+# Context length. Our prompts are <1500 tokens so 4096 is plenty.
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-4096}"
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 if [ ! -f "$VLLM_BIN" ]; then
     echo "[ERROR] vLLM not found at $VLLM_BIN"
@@ -42,11 +51,15 @@ sleep 1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting vLLM on port $VLLM_PORT" > "$LOG"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Model: $VLLM_MODEL" >> "$LOG"
 
-exec env VLLM_GPU_MEMORY_UTILIZATION=0.9 \
+# nice -n 19  → lowest CPU priority (OS schedules it only when nothing else needs CPU)
+# ionice -c 3 → idle I/O class (disk access only when no other process is waiting)
+exec nice -n 19 ionice -c 3 \
+  env VLLM_GPU_MEMORY_UTILIZATION="$GPU_UTIL" \
   "$VLLM_BIN" serve "$VLLM_MODEL" \
   --quantization compressed-tensors \
   --enable-prefix-caching \
-  --max-model-len 8192 \
+  --max-model-len "$MAX_MODEL_LEN" \
+  --max-num-seqs "$MAX_SEQS" \
   --port "$VLLM_PORT" \
   --host 0.0.0.0 \
   --trust-remote-code \

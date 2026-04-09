@@ -24,6 +24,7 @@ Fetch speed is unaffected: trust status is pre-computed before the response.
 import json
 import logging
 import threading
+import time
 import urllib.request
 import urllib.error
 from typing import Optional, List, Dict, Any, Tuple
@@ -34,10 +35,18 @@ logger = logging.getLogger("mempalace.contradiction")
 VLLM_BASE_URL  = "http://172.25.105.117:8000/v1/chat/completions"
 VLLM_MODEL     = "/home/jorqu/models/gemma-4-E4B-it-FP8"
 STAGE1_THRESHOLD = 0.80    # auto-resolve if LLM confidence ≥ this
-CANDIDATES_K     = 5       # how many similar drawers to check per new drawer
+CANDIDATES_K     = 2       # candidates per drawer (was 5 — fewer = less GPU pressure)
 MAX_TOKENS_S1    = 512
 MAX_TOKENS_S2    = 768
-REQUEST_TIMEOUT  = 30      # seconds
+REQUEST_TIMEOUT  = 60      # seconds (longer timeout since vLLM runs at idle priority)
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# Detection is deliberately slow — correctness over speed.
+INTER_REQUEST_SLEEP  = 5.0   # seconds between each vLLM call within a thread
+GLOBAL_COOLDOWN_SEC  = 120   # minimum seconds between any two detection runs globally
+
+_last_detection_time: float = 0.0
+_rate_lock = threading.Lock()
 
 CONFLICT_TYPES = ["direct_contradiction", "temporal_update", "partial_overlap", "none"]
 
@@ -242,9 +251,26 @@ def run_detection_thread(
     """
     Background thread: runs Stage 1 → optionally Stage 2 for each candidate.
     Called via threading.Thread(daemon=True).start() from tool_add_drawer.
+
+    Deliberately throttled: global cooldown + inter-request sleep keep
+    vLLM's GPU/CPU pressure anecdotal on the host machine.
     """
+    global _last_detection_time
+
+    # ── Global cooldown — only one detection window every N seconds ───────────
+    with _rate_lock:
+        now = time.monotonic()
+        wait = GLOBAL_COOLDOWN_SEC - (now - _last_detection_time)
+        if wait > 0:
+            logger.debug(f"Detection cooldown: sleeping {wait:.0f}s")
+            time.sleep(wait)
+        _last_detection_time = time.monotonic()
+
     for candidate in candidates:
         try:
+            # Breathe between candidates — don't hammer vLLM back-to-back
+            time.sleep(INTER_REQUEST_SLEEP)
+
             s1 = stage1_check(new_text, candidate)
             if not s1:
                 continue  # vLLM unavailable — skip silently
