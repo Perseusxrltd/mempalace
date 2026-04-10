@@ -349,11 +349,15 @@ class ManagedBackend(OpenAICompatBackend):
         if self.start_script.startswith("wsl://"):
             wsl_path = self._wsl_script_path()
             wsl_exe = self._wsl_exe()
+            # Strip Windows CRLF line endings before executing — scripts edited
+            # on Windows are often saved with \r\n which causes bash to fail
+            # with "$'\r': command not found" errors in WSL.
+            cmd = f"sed -i 's/\\r//' {wsl_path} && bash {wsl_path}"
             if sys.platform == "win32":
                 # wsl.exe with DETACHED_PROCESS creates an independent Windows
                 # process; it keeps WSL alive for as long as vLLM runs.
                 subprocess.Popen(
-                    [wsl_exe, "-d", self.wsl_distro, "-e", "bash", wsl_path],
+                    [wsl_exe, "-d", self.wsl_distro, "-e", "bash", "-c", cmd],
                     creationflags=_DETACHED_FLAGS,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -361,7 +365,7 @@ class ManagedBackend(OpenAICompatBackend):
                 )
             else:
                 subprocess.Popen(
-                    [wsl_exe, "-d", self.wsl_distro, "-e", "bash", wsl_path],
+                    [wsl_exe, "-d", self.wsl_distro, "-e", "bash", "-c", cmd],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     start_new_session=True,
