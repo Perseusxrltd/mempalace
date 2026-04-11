@@ -42,7 +42,7 @@ DEFAULT_LIMIT = 50  # drawers per run
 KG_EXTRACTION_PROMPT = """Extract factual triples from this memory fragment.
 Return ONLY a JSON array of objects, each with keys: subject, relation, object.
 Only include clear, verifiable facts. If none, return [].
-Example: [{"subject": "Mnemion", "relation": "version", "object": "3.2.8"}]
+Example: [{{"subject": "Mnemion", "relation": "version", "object": "3.2.8"}}]
 
 Memory:
 {text}"""
@@ -352,7 +352,7 @@ def show_status() -> None:
         )
 
     print("\nMnemion Librarian Status")
-    print("─" * 40)
+    print("-" * 40)
     print(f"  Last run:        {state.get('last_run') or 'never'}")
     print(f"  Total processed: {state.get('total_processed', 0)}")
     print(f"  Pending drawers: {len(pending)}")
