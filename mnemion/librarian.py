@@ -37,8 +37,8 @@ from typing import Optional
 
 logger = logging.getLogger("mnemion.librarian")
 
-INTER_REQUEST_SLEEP = 8.0   # seconds between LLM calls — lower GPU pressure
-DEFAULT_LIMIT = 50          # drawers per run
+INTER_REQUEST_SLEEP = 8.0  # seconds between LLM calls — lower GPU pressure
+DEFAULT_LIMIT = 50  # drawers per run
 KG_EXTRACTION_PROMPT = """Extract factual triples from this memory fragment.
 Return ONLY a JSON array of objects, each with keys: subject, relation, object.
 Only include clear, verifiable facts. If none, return [].
@@ -56,15 +56,26 @@ Memory:
 {text}"""
 
 VALID_ROOMS = {
-    "technical", "planning", "decision", "project_fact", "personal",
-    "preference", "tech_fact", "problem", "milestone", "documentation",
-    "emotional", "identity", "general",
+    "technical",
+    "planning",
+    "decision",
+    "project_fact",
+    "personal",
+    "preference",
+    "tech_fact",
+    "problem",
+    "milestone",
+    "documentation",
+    "emotional",
+    "identity",
+    "general",
 }
 
 STATE_FILE = Path(os.path.expanduser("~/.mnemion/librarian_state.json"))
 
 
 # ── State management ──────────────────────────────────────────────────────────
+
 
 def _load_state() -> dict:
     if STATE_FILE.exists():
@@ -84,7 +95,10 @@ def _save_state(state: dict) -> None:
 
 # ── Drawer discovery ──────────────────────────────────────────────────────────
 
-def _find_unprocessed(kg_path: str, limit: int, wing: Optional[str], cursor_ts: Optional[str]) -> list:
+
+def _find_unprocessed(
+    kg_path: str, limit: int, wing: Optional[str], cursor_ts: Optional[str]
+) -> list:
     """
     Return drawers that have never been LLM-reviewed:
       - verifications = 0 AND challenges = 0 (never touched by LLM)
@@ -130,6 +144,7 @@ def _get_drawer_text(collection, drawer_id: str) -> Optional[str]:
 
 # ── LLM tasks ─────────────────────────────────────────────────────────────────
 
+
 def _extract_kg_triples(backend, text: str) -> list:
     """Ask LLM to extract entity triples from a drawer."""
     messages = [
@@ -142,8 +157,11 @@ def _extract_kg_triples(backend, text: str) -> list:
     try:
         triples = json.loads(raw)
         if isinstance(triples, list):
-            return [t for t in triples if isinstance(t, dict)
-                    and all(k in t for k in ("subject", "relation", "object"))]
+            return [
+                t
+                for t in triples
+                if isinstance(t, dict) and all(k in t for k in ("subject", "relation", "object"))
+            ]
     except json.JSONDecodeError:
         pass
     return []
@@ -165,7 +183,10 @@ def _suggest_room(backend, text: str, current_room: str) -> Optional[str]:
 
 # ── Main librarian run ────────────────────────────────────────────────────────
 
-def run_librarian(limit: int = DEFAULT_LIMIT, wing: Optional[str] = None, dry_run: bool = False) -> dict:
+
+def run_librarian(
+    limit: int = DEFAULT_LIMIT, wing: Optional[str] = None, dry_run: bool = False
+) -> dict:
     """
     Process up to `limit` unreviewed drawers.
     Returns a summary dict for the diary entry.
@@ -234,13 +255,12 @@ def run_librarian(limit: int = DEFAULT_LIMIT, wing: Optional[str] = None, dry_ru
         try:
             # ── Task 1: Contradiction detection (re-uses existing logic) ──────
             from . import contradiction_detector as _cd
+
             candidates = []
             try:
                 results = hybrid.search(text, wing=drawer_wing, n_results=3)
                 candidates = [
-                    {"id": r["id"], "text": r["text"]}
-                    for r in results
-                    if r["id"] != drawer_id
+                    {"id": r["id"], "text": r["text"]} for r in results if r["id"] != drawer_id
                 ][:2]
             except Exception as e:
                 logger.debug(f"Candidate search failed for {drawer_id}: {e}")
@@ -255,10 +275,15 @@ def run_librarian(limit: int = DEFAULT_LIMIT, wing: Optional[str] = None, dry_ru
                     )
                     if not dry_run:
                         from .contradiction_detector import _apply_resolution
+
                         s1["stage"] = 1
-                        _apply_resolution(trust, drawer_id, candidate["id"], s1, conflict_id, stage=1)
+                        _apply_resolution(
+                            trust, drawer_id, candidate["id"], s1, conflict_id, stage=1
+                        )
                     stats["contradictions_found"] += 1
-                    logger.info(f"  conflict: {drawer_id[:16]} vs {candidate['id'][:16]} ({s1['conflict_type']})")
+                    logger.info(
+                        f"  conflict: {drawer_id[:16]} vs {candidate['id'][:16]} ({s1['conflict_type']})"
+                    )
 
             # ── Task 2: Room re-classification ────────────────────────────────
             time.sleep(INTER_REQUEST_SLEEP)
@@ -322,7 +347,9 @@ def show_status() -> None:
 
     pending = []
     if os.path.exists(kg_path):
-        pending = _find_unprocessed(kg_path, limit=99999, wing=None, cursor_ts=state.get("cursor_timestamp"))
+        pending = _find_unprocessed(
+            kg_path, limit=99999, wing=None, cursor_ts=state.get("cursor_timestamp")
+        )
 
     print("\nMnemion Librarian Status")
     print("─" * 40)
