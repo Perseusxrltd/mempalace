@@ -44,6 +44,9 @@ class HybridSearcher:
         self.collection_name = cfg.collection_name
 
         # Persistent clients
+        from .chroma_compat import fix_blob_seq_ids
+
+        fix_blob_seq_ids(self.palace_path)
         self.chroma_client = chromadb.PersistentClient(path=self.palace_path)
         try:
             self.collection = self.chroma_client.get_collection(self.collection_name)

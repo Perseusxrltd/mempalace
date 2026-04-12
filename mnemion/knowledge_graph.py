@@ -39,6 +39,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import threading
 from datetime import date, datetime
 from pathlib import Path
 
@@ -50,6 +51,7 @@ class KnowledgeGraph:
     def __init__(self, db_path: str = None):
         self.db_path = db_path or DEFAULT_KG_PATH
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._init_db()
 
     def _init_db(self):
@@ -109,13 +111,14 @@ class KnowledgeGraph:
         """Add or update an entity node."""
         eid = self._entity_id(name)
         props = json.dumps(properties or {})
-        conn = self._conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO entities (id, name, type, properties) VALUES (?, ?, ?, ?)",
-            (eid, name, entity_type, props),
-        )
-        conn.commit()
-        conn.close()
+        with self._lock:
+            conn = self._conn()
+            with conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO entities (id, name, type, properties) VALUES (?, ?, ?, ?)",
+                    (eid, name, entity_type, props),
+                )
+            conn.close()
         return eid
 
     def add_triple(
@@ -141,40 +144,43 @@ class KnowledgeGraph:
         obj_id = self._entity_id(obj)
         pred = predicate.lower().replace(" ", "_")
 
-        # Auto-create entities if they don't exist
-        conn = self._conn()
-        conn.execute("INSERT OR IGNORE INTO entities (id, name) VALUES (?, ?)", (sub_id, subject))
-        conn.execute("INSERT OR IGNORE INTO entities (id, name) VALUES (?, ?)", (obj_id, obj))
+        with self._lock:
+            # Auto-create entities if they don't exist
+            conn = self._conn()
+            conn.execute(
+                "INSERT OR IGNORE INTO entities (id, name) VALUES (?, ?)", (sub_id, subject)
+            )
+            conn.execute("INSERT OR IGNORE INTO entities (id, name) VALUES (?, ?)", (obj_id, obj))
 
-        # Check for existing identical triple
-        existing = conn.execute(
-            "SELECT id FROM triples WHERE subject=? AND predicate=? AND object=? AND valid_to IS NULL",
-            (sub_id, pred, obj_id),
-        ).fetchone()
+            # Check for existing identical triple
+            existing = conn.execute(
+                "SELECT id FROM triples WHERE subject=? AND predicate=? AND object=? AND valid_to IS NULL",
+                (sub_id, pred, obj_id),
+            ).fetchone()
 
-        if existing:
+            if existing:
+                conn.close()
+                return existing[0]  # Already exists and still valid
+
+            triple_id = f"t_{sub_id}_{pred}_{obj_id}_{hashlib.md5(f'{valid_from}{datetime.now().isoformat()}'.encode()).hexdigest()[:8]}"
+
+            with conn:
+                conn.execute(
+                    """INSERT INTO triples (id, subject, predicate, object, valid_from, valid_to, confidence, source_closet, source_file)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        triple_id,
+                        sub_id,
+                        pred,
+                        obj_id,
+                        valid_from,
+                        valid_to,
+                        confidence,
+                        source_closet,
+                        source_file,
+                    ),
+                )
             conn.close()
-            return existing[0]  # Already exists and still valid
-
-        triple_id = f"t_{sub_id}_{pred}_{obj_id}_{hashlib.md5(f'{valid_from}{datetime.now().isoformat()}'.encode()).hexdigest()[:8]}"
-
-        conn.execute(
-            """INSERT INTO triples (id, subject, predicate, object, valid_from, valid_to, confidence, source_closet, source_file)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                triple_id,
-                sub_id,
-                pred,
-                obj_id,
-                valid_from,
-                valid_to,
-                confidence,
-                source_closet,
-                source_file,
-            ),
-        )
-        conn.commit()
-        conn.close()
         return triple_id
 
     def invalidate(self, subject: str, predicate: str, obj: str, ended: str = None):
@@ -184,13 +190,14 @@ class KnowledgeGraph:
         pred = predicate.lower().replace(" ", "_")
         ended = ended or date.today().isoformat()
 
-        conn = self._conn()
-        conn.execute(
-            "UPDATE triples SET valid_to=? WHERE subject=? AND predicate=? AND object=? AND valid_to IS NULL",
-            (ended, sub_id, pred, obj_id),
-        )
-        conn.commit()
-        conn.close()
+        with self._lock:
+            conn = self._conn()
+            with conn:
+                conn.execute(
+                    "UPDATE triples SET valid_to=? WHERE subject=? AND predicate=? AND object=? AND valid_to IS NULL",
+                    (ended, sub_id, pred, obj_id),
+                )
+            conn.close()
 
     # ── Query operations ──────────────────────────────────────────────────
 

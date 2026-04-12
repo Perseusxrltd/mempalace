@@ -85,6 +85,9 @@ def _get_collection(create=False):
     global _client_cache, _collection_cache
     try:
         if _client_cache is None:
+            from .chroma_compat import fix_blob_seq_ids
+
+            fix_blob_seq_ids(_config.palace_path)
             _client_cache = chromadb.PersistentClient(path=_config.palace_path)
         if create:
             # Issue #218: cosine required so similarity = 1 - distance is meaningful.
@@ -223,6 +226,7 @@ def tool_search(
     query: str, limit: int = 5, wing: str = None, room: str = None, min_similarity: float = 0.0
 ):
     """Hybrid search tool handler."""
+    limit = max(1, min(limit, 50))
     hits = _hybrid.search(
         query, wing=wing, room=room, n_results=limit, min_similarity=min_similarity
     )
@@ -264,8 +268,9 @@ def tool_check_duplicate(content: str, threshold: float = 0.9):
             "is_duplicate": len(duplicates) > 0,
             "matches": duplicates,
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        logger.exception("check_duplicate failed")
+        return {"error": "Duplicate check failed"}
 
 
 def tool_get_aaak_spec():
@@ -275,6 +280,7 @@ def tool_get_aaak_spec():
 
 def tool_traverse_graph(start_room: str, max_hops: int = 2):
     """Walk the palace graph from a room. Find connected ideas across wings."""
+    max_hops = max(1, min(max_hops, 10))
     col = _get_collection()
     if not col:
         return _no_palace()
@@ -353,8 +359,9 @@ def tool_add_drawer(
         _cd.spawn_detection(drawer_id, content, wing, room, _trust, _hybrid)
 
         return {"success": True, "drawer_id": drawer_id, "wing": wing, "room": room}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except Exception:
+        logger.exception("add_drawer failed")
+        return {"success": False, "error": "Failed to add drawer"}
 
 
 def tool_delete_drawer(drawer_id: str):
@@ -382,8 +389,9 @@ def tool_delete_drawer(drawer_id: str):
 
         logger.info(f"Deleted drawer: {drawer_id}")
         return {"success": True, "drawer_id": drawer_id}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except Exception:
+        logger.exception("delete_drawer failed")
+        return {"success": False, "error": "Failed to delete drawer"}
 
 
 # ==================== TRUST TOOLS ====================
@@ -549,8 +557,9 @@ def tool_diary_write(agent_name: str, entry: str, topic: str = "general"):
             "topic": topic,
             "timestamp": now.isoformat(),
         }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except Exception:
+        logger.exception("diary_write failed")
+        return {"success": False, "error": "Failed to write diary entry"}
 
 
 def tool_diary_read(agent_name: str, last_n: int = 10):
@@ -558,6 +567,7 @@ def tool_diary_read(agent_name: str, last_n: int = 10):
     Read an agent's recent diary entries. Returns the last N entries
     in chronological order — the agent's personal journal.
     """
+    last_n = max(1, min(last_n, 100))
     wing = f"wing_{agent_name.lower().replace(' ', '_')}"
     col = _get_collection()
     if not col:
@@ -594,8 +604,9 @@ def tool_diary_read(agent_name: str, last_n: int = 10):
             "total": len(results["ids"]),
             "showing": len(entries),
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        logger.exception("diary_read failed")
+        return {"error": "Failed to read diary entries"}
 
 
 # ==================== MCP PROTOCOL ====================
@@ -983,10 +994,14 @@ def handle_request(request):
                 "id": req_id,
                 "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"},
             }
+        # Whitelist arguments to declared schema properties only.
+        # Prevents callers from injecting internal params (added_by, source_file, etc.)
+        # that could spoof the audit trail.
+        schema_props = TOOLS[tool_name]["input_schema"].get("properties", {})
+        tool_args = {k: v for k, v in tool_args.items() if k in schema_props}
         # Coerce argument types based on input_schema.
         # MCP JSON transport may deliver integers as floats or strings;
         # ChromaDB and Python slicing require native int.
-        schema_props = TOOLS[tool_name]["input_schema"].get("properties", {})
         for key, value in list(tool_args.items()):
             prop_schema = schema_props.get(key, {})
             declared_type = prop_schema.get("type")

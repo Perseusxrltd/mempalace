@@ -397,6 +397,9 @@ def chunk_text(content: str, source_file: str) -> list:
 
 def get_collection(palace_path: str):
     os.makedirs(palace_path, exist_ok=True)
+    from .chroma_compat import fix_blob_seq_ids
+
+    fix_blob_seq_ids(palace_path)
     client = chromadb.PersistentClient(path=palace_path)
     try:
         return client.get_collection("mnemion_drawers")
@@ -420,7 +423,7 @@ def file_already_mined(collection, source_file: str) -> bool:
         if stored_mtime is None:
             return False
         current_mtime = os.path.getmtime(source_file)
-        return float(stored_mtime) == current_mtime
+        return abs(float(stored_mtime) - current_mtime) < 0.001
     except Exception:
         return False
 
