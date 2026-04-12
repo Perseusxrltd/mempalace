@@ -402,6 +402,13 @@ The "how does the AI know to use it" problem, solved at every layer:
 - **`SYSTEM_PROMPT.md`**: copy-paste template for all major AI platforms — Claude Code `CLAUDE.md`, Cursor `.cursorrules`, Claude.ai Projects, ChatGPT Custom Instructions, Gemini, OpenAI-compatible APIs.
 - **`~/.claude/CLAUDE.md` support**: Claude Code reads this file at every session start, before any tool is available — the most reliable bootstrap for Claude Code users.
 
+### v3.2.23 — Multi-Agent Palace Sync
+
+- **`sync/merge_exports.py`** (new): pure-Python merge utility that produces a clean union of two `drawers_export.json` files — local and remote — without git merge markers. Deduplicates by drawer ID; when the same ID exists in both, the one with the newer `filed_at` timestamp wins (remote wins on tie).
+- **`sync/SyncMemories.ps1`** (rewritten): now fetches before pushing, merges remote export if remote is ahead, uses `git push --force-with-lease`, and retries up to 5 times with random 2–9 s jitter on rejection. Lock file prevents concurrent runs on the same machine (stale locks > 10 min auto-cleared). Agent ID (`MNEMION_AGENT_ID` env, default: hostname) is stamped in every commit message.
+- **`sync/SyncMemories.sh`** (new): same algorithm for Linux/macOS agents (bash implementation).
+- **`sync/README.md`** (rewritten): documents multi-agent design, environment variables, merge algorithm, `.gitignore` requirements, and known v1 limitation (drawer deletions don't propagate across agents).
+
 ### v3.2.22 — Entity Detection Quality, Search Ranking, Makefile
 
 - **Entity detector — stopword expansion** (`entity_detector.py`): ~120 additional generic words added to `STOPWORDS` covering status adjectives (`current`, `verified`, `pending`, `active`…), common tech/business nouns (`stage`, `trust`, `hybrid`, `call`, `notes`, `auto`…), and adjective-nouns that appear capitalised in project docs (`lexical`, `semantic`, `abstract`…). Directly addresses reported false positives.
@@ -493,7 +500,7 @@ Eight upstream bugs fixed, sourced from the milla-jovovich/mnemion community:
 MIT — see [LICENSE](LICENSE).
 
 <!-- Link Definitions -->
-[version-shield]: https://img.shields.io/badge/version-3.2.22-4dc9f6?style=flat-square&labelColor=0a0e14
+[version-shield]: https://img.shields.io/badge/version-3.2.23-4dc9f6?style=flat-square&labelColor=0a0e14
 [release-link]: https://github.com/Perseusxrltd/mnemion/releases
 [python-shield]: https://img.shields.io/badge/python-3.9--3.14-7dd8f8?style=flat-square&labelColor=0a0e14&logo=python&logoColor=7dd8f8
 [python-link]: https://www.python.org/
