@@ -180,7 +180,7 @@ def _apply_resolution(
         trust.update_status(
             candidate_id,
             STATUS_SUPERSEDED,
-            confidence=max(0.1, trust.get(candidate_id)["confidence"] - 0.3),
+            confidence=max(0.1, (trust.get(candidate_id) or {}).get("confidence", 1.0) - 0.3),
             superseded_by=new_drawer_id,
             reason=f"stage{stage}: {reason}",
             changed_by="llm",

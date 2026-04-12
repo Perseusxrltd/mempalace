@@ -397,7 +397,7 @@ def tool_trust_stats():
 def tool_verify_drawer(drawer_id: str):
     """Mark a drawer as verified — bumps confidence by 0.05, max 1.0."""
     rec = _trust.get(drawer_id)
-    if not rec:
+    if rec is None:
         return {"error": f"No trust record for {drawer_id}"}
     return _trust.verify(drawer_id)
 
@@ -405,7 +405,7 @@ def tool_verify_drawer(drawer_id: str):
 def tool_challenge_drawer(drawer_id: str, reason: str = ""):
     """Challenge a drawer's accuracy — lowers confidence by 0.1, min 0.1."""
     rec = _trust.get(drawer_id)
-    if not rec:
+    if rec is None:
         return {"error": f"No trust record for {drawer_id}"}
     result = _trust.challenge(drawer_id)
     if reason:
@@ -431,7 +431,7 @@ def tool_resolve_contest(drawer_id: str, winner_id: str, resolution_note: str = 
         return {"error": "drawer_id and winner_id must be different drawers"}
 
     for did in [drawer_id, winner_id]:
-        if not _trust.get(did):
+        if _trust.get(did) is None:
             return {"error": f"No trust record for {did}"}
 
     loser_id = drawer_id if winner_id != drawer_id else winner_id

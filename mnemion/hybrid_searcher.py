@@ -58,11 +58,13 @@ class HybridSearcher:
         Executes a lexical search against the SQLite FTS5 virtual table.
         Quotes the query to handle special characters (hyphens, dots) as literals.
         """
-        conn = sqlite3.connect(self.kg_path)
+        conn = sqlite3.connect(self.kg_path, timeout=10)
 
-        # Build query with optional wing/room scoping
+        # Build query with optional wing/room scoping.
+        # Wrap in double-quotes for phrase search; escape embedded quotes by doubling them.
+        escaped = query.replace('"', '""')
         sql = "SELECT drawer_id FROM drawers_fts WHERE content MATCH ?"
-        params = [f'"{query}"']
+        params = [f'"{escaped}"']
 
         if wing:
             sql += " AND wing = ?"
@@ -120,7 +122,7 @@ class HybridSearcher:
             return {}
         try:
             placeholders = ",".join("?" * len(drawer_ids))
-            conn = sqlite3.connect(self.kg_path)
+            conn = sqlite3.connect(self.kg_path, timeout=10)
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 f"SELECT drawer_id, status, confidence FROM drawer_trust WHERE drawer_id IN ({placeholders})",
