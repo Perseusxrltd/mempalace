@@ -217,6 +217,8 @@ def print_proposed_structure(project_name: str, rooms: list, total_files: int, s
 
 def get_user_approval(rooms: list) -> list:
     """Same approval flow as AI version."""
+    if not sys.stdin.isatty():
+        return rooms
     print("  Review the proposed rooms above.")
     print("  Options:")
     print("    [enter]  Accept all rooms")
@@ -303,7 +305,8 @@ def detect_rooms_local(project_dir: str, yes: bool = False):
         source = "fallback (flat project)"
 
     print_proposed_structure(project_name, rooms, len(files), source)
-    if yes:
+    # Auto-accept when --yes or when stdin isn't a terminal (CI, pipes, scripts).
+    if yes or not sys.stdin.isatty():
         approved_rooms = rooms
     else:
         approved_rooms = get_user_approval(rooms)

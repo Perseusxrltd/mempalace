@@ -17,6 +17,7 @@ Usage:
 
 import re
 import os
+import sys
 from pathlib import Path
 from collections import defaultdict
 
@@ -895,8 +896,9 @@ def confirm_entities(detected: dict, yes: bool = False) -> dict:
     confirmed_people = [e["name"] for e in detected["people"]]
     confirmed_projects = [e["name"] for e in detected["projects"]]
 
-    if yes:
-        # Auto-accept: include all detected (skip uncertain — ambiguous without user input)
+    # Treat non-interactive stdin (pipes, CI, scripts) the same as --yes.
+    # Calling input() on a non-tty raises EOFError and kills the run.
+    if yes or not sys.stdin.isatty():
         print(
             f"\n  Auto-accepting {len(confirmed_people)} people, {len(confirmed_projects)} projects."
         )
