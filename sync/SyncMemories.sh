@@ -130,16 +130,25 @@ from mnemion.config import MempalaceConfig
 
 config = MempalaceConfig()
 fix_blob_seq_ids(config.palace_path)
+BATCH = 2000  # stay under SQLite SQLITE_MAX_VARIABLE_NUMBER on any version
 try:
     client  = chromadb.PersistentClient(path=config.palace_path)
     col     = client.get_collection(config.collection_name)
-    all_data = col.get(include=['documents', 'metadatas'], limit=100000)
     drawers = []
-    for id_, doc, meta in zip(all_data['ids'], all_data['documents'], all_data['metadatas']):
-        wing = (meta or {}).get('wing', '')
-        if wing == 'sessions' and (meta or {}).get('added_by') != 'auto_hook':
-            continue
-        drawers.append({'id': id_, 'content': doc, 'meta': meta})
+    offset  = 0
+    while True:
+        batch = col.get(include=['documents', 'metadatas'], limit=BATCH, offset=offset)
+        ids = batch.get('ids') or []
+        if not ids:
+            break
+        for id_, doc, meta in zip(ids, batch['documents'], batch['metadatas']):
+            wing = (meta or {}).get('wing', '')
+            if wing == 'sessions' and (meta or {}).get('added_by') != 'auto_hook':
+                continue
+            drawers.append({'id': id_, 'content': doc, 'meta': meta})
+        offset += len(ids)
+        if len(ids) < BATCH:
+            break
     with open("$EXPORT_FILE", 'w', encoding='utf-8') as f:
         json.dump(sorted(drawers, key=lambda d: d['id']), f, ensure_ascii=False, indent=2)
     print(f'{len(drawers)} drawers exported')

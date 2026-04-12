@@ -1,11 +1,11 @@
-# Mnemion Multi-Agent Sync — Windows (PowerShell)
+# Mnemion Multi-Agent Sync  -  Windows (PowerShell)
 # ===================================================
 # Exports the local palace to JSON, merges with remote if needed, commits,
 # and pushes.  Safe for concurrent use by multiple agents on different machines.
 #
 # How it works:
 #   1. Acquire a local lock file (prevents concurrent runs on the same machine)
-#   2. Export local ChromaDB drawers → archive/drawers_export.json
+#   2. Export local ChromaDB drawers -> archive/drawers_export.json
 #   3. git fetch (non-destructive peek at remote state)
 #   4. If remote is ahead: merge remote export into local using merge_exports.py
 #   5. git add + commit (with agent identity in message)
@@ -18,17 +18,17 @@
 #   Copy to ~/.mnemion/SyncMemories.ps1 and schedule hourly (see sync/README.md).
 #
 # Environment variables:
-#   MNEMION_AGENT_ID   — display name in commit messages (default: $env:COMPUTERNAME)
-#   MNEMION_BRANCH     — git branch to sync (default: auto-detected, fallback: main)
-#   MNEMION_REPO_DIR   — override repo dir (default: ~/.mnemion)
-#   MNEMION_SOURCE_DIR — path to mnemion package (default: next to this script's parent)
+#   MNEMION_AGENT_ID    -  display name in commit messages (default: $env:COMPUTERNAME)
+#   MNEMION_BRANCH      -  git branch to sync (default: auto-detected, fallback: main)
+#   MNEMION_REPO_DIR    -  override repo dir (default: ~/.mnemion)
+#   MNEMION_SOURCE_DIR  -  path to mnemion package (default: next to this script's parent)
 
 param(
     [string]$MempalDir    = "",
     [string]$MempalaceSrc = ""
 )
 
-# ── Configuration ────────────────────────────────────────────────────────────
+# -- Configuration ------------------------------------------------------------
 
 $AgentId   = if ($env:MNEMION_AGENT_ID)  { $env:MNEMION_AGENT_ID }  else { $env:COMPUTERNAME }
 $RepoDir   = if ($env:MNEMION_REPO_DIR)  { $env:MNEMION_REPO_DIR }  elseif ($MempalDir) { $MempalDir } else { "$env:USERPROFILE\.mnemion" }
@@ -43,11 +43,25 @@ $ExportDir   = Join-Path $RepoDir "archive"
 $ExportFile  = Join-Path $ExportDir "drawers_export.json"
 $RemoteFile  = Join-Path $ExportDir ".drawers_remote_tmp.json"
 $LockFile    = Join-Path $RepoDir ".sync_lock"
-$MergeScript = Join-Path $SrcDir "sync\merge_exports.py"
 
-# Fallback: merge script next to this file
-if (-not (Test-Path $MergeScript)) {
-    $MergeScript = Join-Path $PSScriptRoot "merge_exports.py"
+# Locate merge_exports.py: prefer source repo, fall back to same dir as this script
+$MergeScript = ""
+if ($SrcDir) {
+    $candidate = Join-Path $SrcDir "sync\merge_exports.py"
+    if (Test-Path $candidate) { $MergeScript = $candidate }
+}
+if (-not $MergeScript) {
+    # Script dir: $PSScriptRoot when run by Task Scheduler, otherwise derive from MyInvocation
+    $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else {
+        Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    $candidate = Join-Path $scriptDir "merge_exports.py"
+    if (Test-Path $candidate) { $MergeScript = $candidate }
+}
+if (-not $MergeScript) {
+    # Final fallback: look in the repo dir itself
+    $candidate = Join-Path $RepoDir "merge_exports.py"
+    if (Test-Path $candidate) { $MergeScript = $candidate }
 }
 
 function Write-Log([string]$msg) {
@@ -55,9 +69,9 @@ function Write-Log([string]$msg) {
     Write-Output "$ts [$AgentId] $msg"
 }
 
-# ── Lock ─────────────────────────────────────────────────────────────────────
+# -- Lock ---------------------------------------------------------------------
 
-# Stale lock: older than 10 minutes → treat as abandoned
+# Stale lock: older than 10 minutes -> treat as abandoned
 if (Test-Path $LockFile) {
     $lockAge = (Get-Date) - (Get-Item $LockFile).LastWriteTime
     if ($lockAge.TotalMinutes -gt 10) {
@@ -72,7 +86,7 @@ if (Test-Path $LockFile) {
 
 function Release-Lock { if (Test-Path $LockFile) { Remove-Item $LockFile -Force } }
 
-# ── Guard: ensure we are inside the git repo ─────────────────────────────────
+# -- Guard: ensure we are inside the git repo ---------------------------------
 
 if (-not (Test-Path (Join-Path $RepoDir ".git"))) {
     Write-Log "ERROR: $RepoDir is not a git repo. Run 'git init' there first."
@@ -82,35 +96,45 @@ if (-not (Test-Path (Join-Path $RepoDir ".git"))) {
 Set-Location $RepoDir
 New-Item -ItemType Directory -Force -Path $ExportDir | Out-Null
 
-# ── Detect branch ────────────────────────────────────────────────────────────
+# -- Detect branch ------------------------------------------------------------
 
 $Branch = if ($env:MNEMION_BRANCH) { $env:MNEMION_BRANCH } else {
     $b = git rev-parse --abbrev-ref HEAD 2>$null
     if ([string]::IsNullOrEmpty($b) -or $b -eq "HEAD") { "main" } else { $b }
 }
 
-# ── Export ───────────────────────────────────────────────────────────────────
+# -- Export -------------------------------------------------------------------
 
 $exportScript = @"
-import sys, json, os
+import sys, json
 if r'$SrcDir':
     sys.path.insert(0, r'$SrcDir')
 import chromadb
 from mnemion.chroma_compat import fix_blob_seq_ids
 from mnemion.config import MempalaceConfig
 
+BATCH = 2000  # stay under SQLite SQLITE_MAX_VARIABLE_NUMBER on any version
+
 config = MempalaceConfig()
 fix_blob_seq_ids(config.palace_path)
 try:
     client = chromadb.PersistentClient(path=config.palace_path)
     col    = client.get_collection(config.collection_name)
-    all_data = col.get(include=['documents', 'metadatas'], limit=100000)
     drawers = []
-    for id_, doc, meta in zip(all_data['ids'], all_data['documents'], all_data['metadatas']):
-        wing = (meta or {}).get('wing', '')
-        if wing == 'sessions' and (meta or {}).get('added_by') != 'auto_hook':
-            continue
-        drawers.append({'id': id_, 'content': doc, 'meta': meta})
+    offset  = 0
+    while True:
+        batch = col.get(include=['documents', 'metadatas'], limit=BATCH, offset=offset)
+        ids = batch.get('ids') or []
+        if not ids:
+            break
+        for id_, doc, meta in zip(ids, batch['documents'], batch['metadatas']):
+            wing = (meta or {}).get('wing', '')
+            if wing == 'sessions' and (meta or {}).get('added_by') != 'auto_hook':
+                continue
+            drawers.append({'id': id_, 'content': doc, 'meta': meta})
+        offset += len(ids)
+        if len(ids) < BATCH:
+            break
     out = r'$ExportFile'.replace('\\\\', '/').replace('\\', '/')
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(sorted(drawers, key=lambda d: d['id']), f, ensure_ascii=False, indent=2)
@@ -127,7 +151,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Log "Export: $exportResult"
 
-# ── Sync loop ─────────────────────────────────────────────────────────────────
+# -- Sync loop -----------------------------------------------------------------
 
 $committed = $false
 
@@ -151,10 +175,10 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
         Start-Sleep -Seconds $jitter
     }
 
-    # ── Fetch remote ──────────────────────────────────────────────────────────
+    # -- Fetch remote ----------------------------------------------------------
     git fetch origin 2>&1 | Out-Null
 
-    # ── Merge if remote is ahead ──────────────────────────────────────────────
+    # -- Merge if remote is ahead ----------------------------------------------
     $remoteRef = "origin/$Branch"
     $localRef  = "HEAD"
     $remoteAhead = 0
@@ -171,12 +195,12 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
             Write-Log $mergeResult
             Remove-Item $RemoteFile -Force -ErrorAction SilentlyContinue
         } else {
-            Write-Log "Remote has no export yet — skipping merge"
+            Write-Log "Remote has no export yet  -  skipping merge"
             Remove-Item $RemoteFile -Force -ErrorAction SilentlyContinue
         }
     }
 
-    # ── Stage ─────────────────────────────────────────────────────────────────
+    # -- Stage -----------------------------------------------------------------
     git add .
 
     $staged = (git status --porcelain).Trim()
@@ -185,14 +209,14 @@ for ($attempt = 1; $attempt -le $MaxRetries; $attempt++) {
         Release-Lock; exit 0
     }
 
-    # ── Commit ────────────────────────────────────────────────────────────────
+    # -- Commit ----------------------------------------------------------------
     $now     = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $drawerLine = ($exportResult | Select-String "\d+ drawers").Matches[0].Value
     git commit -m "sync: $now [$AgentId] $drawerLine" 2>&1 | Out-Null
     $committed = $true
 
-    # ── Push ──────────────────────────────────────────────────────────────────
-    # --force-with-lease: safe push — only succeeds if nobody pushed since our fetch
+    # -- Push ------------------------------------------------------------------
+    # --force-with-lease: safe push  -  only succeeds if nobody pushed since our fetch
     $pushOut = git push origin $Branch --force-with-lease 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Log "Pushed OK (attempt $attempt). Branch: $Branch"
