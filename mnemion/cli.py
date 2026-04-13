@@ -241,6 +241,7 @@ def cmd_repair(args):
 
 def cmd_restore(args):
     """Import a JSON export (archive/drawers_export.json) into the local palace."""
+    import gc
     import json
     import chromadb
     from pathlib import Path
@@ -250,26 +251,31 @@ def cmd_restore(args):
     palace_path = os.path.expanduser(args.palace) if args.palace else cfg.palace_path
     col_name = cfg.collection_name
     json_file = args.file
+    batch_size = args.batch_size
 
     if not os.path.isfile(json_file):
-        print(f"\n  File not found: {json_file}\n")
+        print(f"\n  File not found: {json_file}\n", flush=True)
         sys.exit(1)
 
-    print(f"\n{'=' * 55}")
-    print("  Mnemion Restore")
-    print(f"{'=' * 55}\n")
-    print(f"  Source:     {json_file}")
-    print(f"  Palace:     {palace_path}")
-    print(f"  Collection: {col_name}\n")
+    file_mb = os.path.getsize(json_file) / 1_048_576
+    print(f"\n{'=' * 55}", flush=True)
+    print("  Mnemion Restore", flush=True)
+    print(f"{'=' * 55}\n", flush=True)
+    print(f"  Source:     {json_file} ({file_mb:.1f} MB)", flush=True)
+    print(f"  Palace:     {palace_path}", flush=True)
+    print(f"  Collection: {col_name}", flush=True)
+    print(f"  Batch size: {batch_size}\n", flush=True)
 
+    print("  Loading export into memory...", flush=True)
     with open(json_file, "r", encoding="utf-8") as f:
         drawers = json.load(f)
 
     if not isinstance(drawers, list):
-        print("  Error: expected a JSON array of drawer objects.\n")
+        print("  Error: expected a JSON array of drawer objects.\n", flush=True)
         sys.exit(1)
 
-    print(f"  {len(drawers)} drawers in export...")
+    total = len(drawers)
+    print(f"  {total} drawers loaded.\n", flush=True)
 
     Path(palace_path).mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=palace_path)
@@ -277,7 +283,7 @@ def cmd_restore(args):
     try:
         col = client.get_or_create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
     except Exception as e:
-        print(f"  Error opening palace: {e}\n")
+        print(f"  Error opening palace: {e}\n", flush=True)
         sys.exit(1)
 
     existing = col.count()
@@ -287,19 +293,17 @@ def cmd_restore(args):
         sys.exit(1)
 
     if args.replace and existing > 0:
-        print(f"  Replacing {existing} existing drawers...")
+        print(f"  Replacing {existing} existing drawers...", flush=True)
         client.delete_collection(col_name)
         col = client.create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
 
-    BATCH = 500
     filed = 0
     skipped = 0
 
-    for i in range(0, len(drawers), BATCH):
-        batch = drawers[i : i + BATCH]
+    for i in range(0, total, batch_size):
+        batch = drawers[i : i + batch_size]
         ids = [d["id"] for d in batch]
         docs = [d["content"] for d in batch]
-        # Strip None values and non-scalar types (ChromaDB requirement)
         clean_metas = [
             {
                 k: v
@@ -311,15 +315,28 @@ def cmd_restore(args):
         try:
             col.upsert(ids=ids, documents=docs, metadatas=clean_metas)
             filed += len(batch)
-            print(f"  Restored {filed}/{len(drawers)} drawers...")
+            pct = filed * 100 // total
+            print(f"  [{pct:3d}%] {filed}/{total} ...", flush=True)
         except Exception as e:
-            print(f"  Error at batch {i}: {e}")
+            print(f"  Error at offset {i}: {e}", flush=True)
             skipped += len(batch)
+        finally:
+            # Free the batch from the in-memory list so GC can reclaim it
+            for j in range(i, min(i + batch_size, total)):
+                drawers[j] = None
+            del batch, ids, docs, clean_metas
+            gc.collect()
 
-    print(f"\n  Done. {filed} drawers restored" + (f", {skipped} skipped." if skipped else "."))
+    del drawers
+    gc.collect()
+
+    print(
+        f"\n  Done. {filed} drawers restored" + (f", {skipped} skipped." if skipped else "."),
+        flush=True,
+    )
     if filed > 0:
-        print("  Run 'mnemion status' to verify.\n")
-    print(f"{'=' * 55}\n")
+        print("  Run 'mnemion status' to verify.\n", flush=True)
+    print(f"{'=' * 55}\n", flush=True)
 
 
 def cmd_llm(args):
@@ -830,6 +847,13 @@ def main():
         "--replace",
         action="store_true",
         help="Wipe the existing palace and restore from the export",
+    )
+    p_restore.add_argument(
+        "--batch-size",
+        type=int,
+        default=50,
+        dest="batch_size",
+        help="Drawers per ChromaDB write batch (default: 50). Reduce if restore is killed by OOM.",
     )
 
     # repair
