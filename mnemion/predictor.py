@@ -8,24 +8,45 @@ SESSION_FILE = Path(os.path.expanduser("~/.mnemion/session_history.json"))
 MAX_HISTORY = 5
 _history_lock = threading.Lock()
 
-class RoomPredictor:
-    """
-    A JEPA-style predictor that takes a sequence of embeddings (recent context)
-    and predicts the next 'latent state' (Room/Topic).
+# Singleton JEPA model — loaded once, persists across calls
+_JEPA_MODEL_CACHE = None
+_JEPA_WEIGHTS_LOADED = False
 
-    Requires torch — only instantiate when torch is available.
-    """
-    def __init__(self, input_dim=384, hidden_dim=256):
+
+def _get_jepa_predictor():
+    """Lazy-load the JEPA LSTM predictor, loading saved weights if available."""
+    global _JEPA_MODEL_CACHE, _JEPA_WEIGHTS_LOADED
+    if _JEPA_MODEL_CACHE is None:
+        import torch
         import torch.nn as nn
 
-        self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
-        self.out = nn.Linear(hidden_dim, input_dim)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def forward(self, x):
-        # x: (B, T, D)
-        lstm_out, _ = self.lstm(x)
-        last_out = lstm_out[:, -1, :] # (B, hidden_dim)
-        return self.out(last_out)
+        class LivePredictor(nn.Module):
+            def __init__(self, input_dim=384, hidden_dim=256):
+                super().__init__()
+                self.lstm = nn.LSTM(input_dim, hidden_dim, batch_first=True)
+                self.out = nn.Linear(hidden_dim, input_dim)
+
+            def forward(self, x):
+                lstm_out, _ = self.lstm(x)
+                return self.out(lstm_out[:, -1, :])
+
+        _JEPA_MODEL_CACHE = LivePredictor().to(device)
+
+        # Load saved weights ONCE at init, not on every call
+        jepa_path = Path(os.path.expanduser("~/.mnemion/jepa_predictor.pt"))
+        if jepa_path.exists():
+            try:
+                _JEPA_MODEL_CACHE.load_state_dict(
+                    torch.load(jepa_path, map_location=device)
+                )
+            except Exception:
+                pass
+        _JEPA_WEIGHTS_LOADED = True
+
+    return _JEPA_MODEL_CACHE
+
 
 def record_activity(drawer_id, embedding=None):
     """Log a drawer access to the session history. Thread-safe."""
@@ -49,8 +70,10 @@ def record_activity(drawer_id, embedding=None):
         # Keep last N
         history = history[-MAX_HISTORY:]
 
+        SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SESSION_FILE, "w") as f:
             json.dump(history, f)
+
 
 def predict_next_context(current_embeddings):
     """
@@ -61,16 +84,40 @@ def predict_next_context(current_embeddings):
         return None
 
     import torch
+    import torch.nn.functional as F
 
-    # In a real lab scenario, we'd load a pre-trained model here.
-    # For this prototype, we'll implement a 'Mean-Drift' predictor
-    # which is a zero-order JEPA approximation.
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    jepa = _get_jepa_predictor()
 
-    z = torch.tensor(current_embeddings) # (T, D)
-    # Simple linear extrapolation of the latent trajectory
-    diffs = z[1:] - z[:-1]
-    avg_drift = diffs.mean(dim=0)
-    prediction = z[-1] + avg_drift
+    z = torch.tensor(current_embeddings, dtype=torch.float32, device=device)  # (T, D)
 
-    return prediction.tolist()
+    # Online micro-training step using recent history as self-supervised signal
+    optimizer = torch.optim.Adam(jepa.parameters(), lr=0.005)
+    jepa.train()
 
+    for _ in range(5):
+        optimizer.zero_grad()
+        # Predict t from 0:t-1
+        loss = 0
+        for t in range(1, len(z)):
+            x_seq = z[:t].unsqueeze(0)  # (1, t, D)
+            y_target = z[t].unsqueeze(0)  # (1, D)
+            y_pred = jepa(x_seq)
+            loss += F.mse_loss(y_pred, y_target)
+
+        if loss > 0:
+            loss.backward()
+            optimizer.step()
+
+    # Save the actively adapting state
+    jepa_path = Path(os.path.expanduser("~/.mnemion/jepa_predictor.pt"))
+    jepa_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(jepa.state_dict(), jepa_path)
+
+    # Inference: Predict the NEXT state given the entire sequence
+    jepa.eval()
+    with torch.no_grad():
+        final_seq = z.unsqueeze(0)  # (1, T, D)
+        prediction = jepa(final_seq).squeeze(0)  # (D)
+
+    return prediction.cpu().tolist()

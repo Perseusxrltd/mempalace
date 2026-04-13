@@ -45,5 +45,13 @@ def test_grooming():
     else:
         print("\nFAILURE: SIGReg did not reduce similarity.")
 
+    # Real assertions so pytest doesn't silently pass on failure
+    assert avg_sim_after < avg_sim_before, (
+        f"SIGReg did not reduce similarity: before={avg_sim_before:.4f}, after={avg_sim_after:.4f}"
+    )
+    assert cos_diff < 0.8, (
+        f"Semantic drift too large: {cos_diff:.4f}"
+    )
+
 if __name__ == "__main__":
     test_grooming()

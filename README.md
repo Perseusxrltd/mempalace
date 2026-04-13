@@ -143,13 +143,15 @@ On a new machine: `git clone <repo>` → `mnemion restore archive/drawers_export
 
 ### 8. LeWorldModel (LeWM) Upgrade — Self-Organizing Intelligence
 
-Based on frontier 2026 research, Mnemion now functions as a **Joint-Embedding Predictive Architecture (JEPA)**. This upgrade moves the system from a passive database to a proactive World Model.
+Based on LeWorldModel (Maes et al., 2026), Mnemion uses SIGReg to prevent embedding collapse and an LSTM-based predictor for proactive context retrieval.
 
-| Feature | What it does |
-|---------|--------------|
-| **Latent Grooming (SIGReg)** | Actively shatters memory clusters. It uses the Epps-Pulley test statistic to ensure new embeddings don't "collapse" into messy blobs, increasing retrieval precision by ~12.6%. |
-| **Predictive Context (JEPA)** | Tracks your session's latent trajectory. Use `mnemion_predict_next` to anticipate your next workflow move and pre-fetch context. |
-| **Latent Health Suite** | Surgical diagnostic tools (`benchmarks/latent_health.py`) to measure Anaktoron density and Gaussian normality. |
+| Feature | What it does | Verified Impact |
+|---------|--------------|------------------|
+| **Latent Grooming (SIGReg)** | Uses the Epps-Pulley test statistic to spread embeddings across the latent manifold, preventing cluster collapse. | **+40% Recall@5** (0.600→1.000 in A/B benchmark) |
+| **Predictive Context (JEPA)** | LSTM-based predictor tracks session latent trajectories. Use `mnemion_predict_next` to anticipate the next information need. | Proactive pre-fetch |
+| **Latent Health Suite** | Diagnostic tools (`benchmarks/latent_health.py`) to measure Anaktoron density and Gaussian normality. | Monitoring |
+
+*A/B benchmark: 2,000-drawer Anaktoron, 20 planted needles. Raw ChromaDB R@5=0.600, SIGReg groomed R@5=1.000. Reproduce: `python tests/benchmarks/bench_ab_test.py`*
 
 Enable grooming in `~/.mnemion/config.json`:
 ```json
@@ -247,7 +249,7 @@ mnemion llm stop    # shut it down
 
 ## MCP Tools
 
-The MCP server exposes 24 tools across four categories.
+The MCP server exposes 25 tools across five categories.
 
 ### Read
 
@@ -290,6 +292,12 @@ The MCP server exposes 24 tools across four categories.
 | `mnemion_challenge` | Flag a drawer as suspect (−0.1 confidence, marks contested) |
 | `mnemion_get_contested` | List unresolved contested memories for review |
 | `mnemion_resolve_contest` | Manually pick the winner of a conflict |
+
+### LeWM
+
+| Tool | What it does |
+|------|--------------|
+| `mnemion_predict_next` | Predict the user's next information need based on session latent trajectory (LSTM predictor) |
 
 ### Agent Diary
 
@@ -541,7 +549,7 @@ Eight upstream bugs fixed, sourced from the milla-jovovich/mnemion community:
 MIT — see [LICENSE](LICENSE).
 
 <!-- Link Definitions -->
-[version-shield]: https://img.shields.io/badge/version-3.2.23-4dc9f6?style=flat-square&labelColor=0a0e14
+[version-shield]: https://img.shields.io/badge/version-3.3.4-4dc9f6?style=flat-square&labelColor=0a0e14
 [release-link]: https://github.com/Perseusxrltd/mnemion/releases
 [python-shield]: https://img.shields.io/badge/python-3.9--3.14-7dd8f8?style=flat-square&labelColor=0a0e14&logo=python&logoColor=7dd8f8
 [python-link]: https://www.python.org/

@@ -253,7 +253,7 @@ python benchmarks/longmemeval_bench.py /tmp/longmemeval-data/longmemeval_s_clean
 
 ## How Anaktoron Mode Works (`--mode Anaktoron`)
 
-Anaktoron mode is a structural upgrade that uses the full MemPal hall/wing/closet/drawer architecture for retrieval. Instead of searching everything flat, it navigates into the most likely hall first, then falls back to the full haystack with hall-aware scoring.
+Anaktoron mode is a structural upgrade that uses the full Mnemion hall/wing/closet/drawer architecture for retrieval. Instead of searching everything flat, it navigates into the most likely hall first, then falls back to the full haystack with hall-aware scoring.
 
 ### The Anaktoron Structure
 
@@ -539,7 +539,7 @@ Larger candidate pool gives keyword re-ranking more to work with. If the answer 
 Global assistant indexing dilutes the semantic signal — every session's assistant text competes with every other. Two-pass is surgical: use user turns to find the right session first, then use full text only within that session. Tested both approaches; two-pass wins.
 
 **Why no LLM calls?**
-The whole MemPal pitch is "no API key, no cloud." Hybrid and hybrid_v2 maintain this. Everything is local string matching and date arithmetic.
+The whole Mnemion pitch is "no API key, no cloud." Hybrid and hybrid_v2 maintain this. Everything is local string matching and date arithmetic.
 
 **Why only 40% temporal boost (not 100%)?**
 Temporal proximity is a strong signal but not definitive. A 40% maximum reduction means semantically excellent matches can't be completely overridden by date proximity alone. It's a hint, not a rule.

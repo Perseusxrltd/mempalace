@@ -73,6 +73,8 @@ fi
 EXPORT_DIR="$REPO_DIR/archive"
 EXPORT_FILE="$EXPORT_DIR/drawers_export.json"
 REMOTE_FILE="$EXPORT_DIR/.drawers_remote_tmp.json"
+KG_EXPORT_FILE="$EXPORT_DIR/knowledge_graph.sql"
+KG_REMOTE_FILE="$EXPORT_DIR/.kg_remote_tmp.sql"
 LOCK_FILE="$REPO_DIR/.sync_lock"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [$AGENT_ID] $*"; }
@@ -152,6 +154,17 @@ try:
     with open("$EXPORT_FILE", 'w', encoding='utf-8') as f:
         json.dump(sorted(drawers, key=lambda d: d['id']), f, ensure_ascii=False, indent=2)
     print(f'{len(drawers)} drawers exported')
+    
+    import sqlite3, os
+    from pathlib import Path
+    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    if kg_path.exists():
+        conn = sqlite3.connect(kg_path)
+        with open("$KG_EXPORT_FILE", 'w', encoding='utf-8') as f:
+            for line in conn.iterdump():
+                f.write(f"{line}\\n")
+        conn.close()
+        print('Knowledge Graph / Trust data dumped')
 except Exception as e:
     print(f'Export error: {e}', file=sys.stderr)
     sys.exit(1)
@@ -206,6 +219,33 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
             log "Remote has no export yet — skipping merge"
         fi
         rm -f "$REMOTE_FILE"
+
+        # ACTIVE FIX: Sync the Trust & Knowledge Graph SQLite Table
+        if git show "origin/$BRANCH:archive/knowledge_graph.sql" > "$KG_REMOTE_FILE" 2>/dev/null; then
+            log "Trust Graph Remote File Found. Merging SQL dumps natively..."
+            "$PYTHON" - <<PYEOF2
+import sqlite3, sys
+from pathlib import Path
+from mnemion.config import MnemionConfig
+try:
+    config = MnemionConfig()
+    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    if kg_path.exists():
+        conn = sqlite3.connect(kg_path)
+        with open("$KG_REMOTE_FILE", 'r', encoding='utf-8') as f:
+            sql_script = f.read()
+        sql_script = sql_script.replace('INSERT INTO', 'INSERT OR REPLACE INTO')
+        conn.executescript(sql_script)
+        conn.commit()
+        conn.close()
+except Exception as e:
+    print(f'KG Merge exception: {e}')
+PYEOF2
+            rm -f "$KG_REMOTE_FILE"
+            
+            # Re-dump the now successfully unified graph so it is staged 
+            "$PYTHON" -c "import sqlite3; from mnemion.config import MnemionConfig; from pathlib import Path; p=Path(MnemionConfig().palace_path).parent/'knowledge_graph.sqlite3'; c=sqlite3.connect(p); f=open('$KG_EXPORT_FILE', 'w', encoding='utf-8'); [f.write(l+'\n') for l in c.iterdump()]; c.close()"
+        fi
     fi
 
     # ── Stage ────────────────────────────────────────────────────────────────

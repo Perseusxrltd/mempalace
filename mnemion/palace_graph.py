@@ -16,13 +16,13 @@ No external graph DB needed — built from ChromaDB metadata.
 """
 
 from collections import defaultdict, Counter
-from .config import MempalaceConfig
+from .config import MnemionConfig
 
 import chromadb
 
 
 def _get_collection(config=None):
-    config = config or MempalaceConfig()
+    config = config or MnemionConfig()
     try:
         client = chromadb.PersistentClient(path=config.palace_path)
         return client.get_collection(config.collection_name)
@@ -73,7 +73,8 @@ def build_graph(col=None, config=None):
         if len(wings) >= 2:
             for i, wa in enumerate(wings):
                 for wb in wings[i + 1 :]:
-                    for hall in data["halls"]:
+                    halls = data["halls"] if data["halls"] else [""]
+                    for hall in halls:
                         edges.append(
                             {
                                 "room": room,

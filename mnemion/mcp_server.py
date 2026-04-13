@@ -264,15 +264,37 @@ def tool_predict_next():
     if not embeddings:
         return {"prediction": None, "note": "No embeddings in history."}
 
-    _predicted_vector = predictor.predict_next_context(embeddings)
+    pred_vector = predictor.predict_next_context(embeddings)
 
-    # Use the predicted vector to find the closest current room or wing
-    # For now, return the raw prediction logic status
-    return {
-        "predicted_latent_state": "computed",
-        "recent_history_count": len(embeddings),
-        "note": "JEPA Mean-Drift prediction active",
-    }
+    col = _get_collection()
+    if not col or not pred_vector:
+        return {"prediction": None, "note": "No active Anaktoron or prediction failed."}
+
+    try:
+        results = col.query(
+            query_embeddings=[pred_vector],
+            n_results=3,
+        )
+        docs = results.get("documents", [[]])[0]
+        meta = results.get("metadatas", [[]])[0]
+
+        prefetches = []
+        for d, m in zip(docs, meta):
+            prefetches.append({
+                "content": d,
+                "room": m.get("room", "general"),
+                "wing": m.get("wing", "general")
+            })
+
+        return {
+            "predicted_latent_state": "computed",
+            "recent_history_count": len(embeddings),
+            "note": "Live JEPA RNN model prediction active - Context Prefetched",
+            "proactive_context": prefetches
+        }
+    except Exception as e:
+        logger.error(f"JEPA prefetch failure: {e}")
+        return {"prediction": None, "error": str(e)}
 
 
 def tool_check_duplicate(content: str, threshold: float = 0.9):
@@ -381,6 +403,7 @@ def tool_add_drawer(
         )
 
         # 2. Add to SQLite FTS5 (Lexical Mirror)
+        KnowledgeGraph(db_path=_hybrid.kg_path) # Ensure schema exists
         conn = sqlite3.connect(_hybrid.kg_path)
         conn.execute(
             "INSERT OR REPLACE INTO drawers_fts (drawer_id, content, wing, room) VALUES (?, ?, ?, ?)",
@@ -590,6 +613,23 @@ def tool_diary_write(agent_name: str, entry: str, topic: str = "general"):
                 }
             ],
         )
+
+        # 2. Add to SQLite FTS5 (Lexical Mirror)
+        import sqlite3
+        KnowledgeGraph(db_path=_hybrid.kg_path) # Ensure schema exists
+        conn = sqlite3.connect(_hybrid.kg_path)
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO drawers_fts (drawer_id, content, wing, room) VALUES (?, ?, ?, ?)",
+                (entry_id, entry, wing, room),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # 3. Create trust record (idempotent)
+        _trust.create(entry_id, wing=wing, room=room)
+
         logger.info(f"Diary entry: {entry_id} → {wing}/diary/{topic}")
         return {
             "success": True,

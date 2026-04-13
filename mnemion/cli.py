@@ -106,18 +106,37 @@ def cmd_mine(args):
 
 
 def cmd_search(args):
-    from .searcher import search, SearchError
+    from .hybrid_searcher import HybridSearcher
+    from .config import MnemionConfig
 
     anaktoron_path = os.path.expanduser(args.palace) if args.palace else MnemionConfig().anaktoron_path
+    
     try:
-        search(
+        hs = HybridSearcher(palace_path=anaktoron_path)
+        hits = hs.search(
             query=args.query,
-            palace_path=anaktoron_path,
             wing=args.wing,
             room=args.room,
             n_results=args.results,
+            min_similarity=0.0
         )
-    except SearchError:
+        
+        if not hits:
+            print("No results found.")
+            return
+
+        print(f"\nFound {len(hits)} results for '{args.query}'\n" + "="*50)
+        for i, hit in enumerate(hits, 1):
+            w = hit.get('wing', 'unknown')
+            r = hit.get('room', 'unknown')
+            t = hit.get('type', 'vector')
+            print(f"\n[{i}] {w}/{r}  (source: {t})")
+            print(f"ID: {hit['id']}")
+            print("-" * 50)
+            print(f"{hit.get('text', '')}\n")
+            
+    except Exception as e:
+        print(f"Search failed: {e}")
         sys.exit(1)
 
 

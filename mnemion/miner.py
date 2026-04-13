@@ -17,6 +17,9 @@ from collections import defaultdict
 
 import chromadb
 import logging
+import sqlite3
+from .drawer_trust import DrawerTrust
+from .knowledge_graph import KnowledgeGraph
 
 logger = logging.getLogger("mnemion_miner")
 
@@ -448,7 +451,7 @@ def add_drawer(
     sigreg_weight = lewm_cfg.get("sigreg_weight", 0.1)
 
     drawer_id = f"drawer_{wing}_{room}_{hashlib.md5((source_file + str(chunk_index)).encode(), usedforsecurity=False).hexdigest()[:16]}"
-    
+
     try:
         metadata = {
             "wing": wing,
@@ -482,16 +485,18 @@ def add_drawer(
                     base = torch.ones(384) * 0.1
                     noise = torch.randn(384) * 0.01
                     emb = (base + noise).tolist()
-                
+
                 # 2. Fetch latent context from existing wing/room
                 try:
                     cluster = collection.get(where={"wing": wing}, include=["embeddings"], limit=50)
                     if cluster["embeddings"] is not None and len(cluster["embeddings"]) > 0:
                         all_embs = cluster["embeddings"] + [emb]
+                        adapter_path = Path(cfg.anaktoron_path) / "adapter.pt"
                         groomed_cluster = lewm.groom_embeddings(
-                            all_embs, 
-                            iterations=groom_iterations, 
-                            sigreg_weight=sigreg_weight
+                            all_embs,
+                            iterations=groom_iterations,
+                            sigreg_weight=sigreg_weight,
+                            model_path=str(adapter_path)
                         )
                         final_embedding = groomed_cluster[-1]
                     else:
@@ -513,6 +518,24 @@ def add_drawer(
             upsert_kwargs["embeddings"] = [final_embedding]
 
         collection.upsert(**upsert_kwargs)
+
+        # 2. Add to SQLite FTS5 (Lexical Mirror)
+        kg_path = str(Path(cfg.anaktoron_path).parent / "knowledge_graph.sqlite3")
+        KnowledgeGraph(kg_path) # Ensure schema exists
+        conn = sqlite3.connect(kg_path)
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO drawers_fts (drawer_id, content, wing, room) VALUES (?, ?, ?, ?)",
+                (drawer_id, content, wing, room),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        # 3. Create trust record (idempotent)
+        trust_db = DrawerTrust(kg_path)
+        trust_db.create(drawer_id, wing=wing, room=room)
+
         return True
     except Exception as e:
         logger.error(f"Caught exception: {e}")

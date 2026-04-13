@@ -132,15 +132,15 @@ A Python hook (`hooks/mnemion_save_hook.py`) that:
 
 Result: fully automatic, zero-interruption, AI-independent memory extraction.
 
-The pattern-based extractor covers: decisions, preferences, milestones, problems, emotional notes. For richer LLM-powered extraction from historical logs, use `llm_miner.py`.
+The pattern-based extractor covers: decisions, preferences, milestones, problems, emotional notes. For richer extraction from historical logs, use `convo_miner.py`.
 
 ---
 
-## Contribution 4: LLM History Mining (`llm_miner.py`)
+## Contribution 4: LLM History Mining
 
-A standalone script that processes all historical AI conversation logs (Claude JSONL, Gemini JSON, Codex session files) through a local LLM (vLLM/Ollama) to extract structured memories and file them into the Anaktoron.
+Historical AI conversation logs (Claude JSONL, Gemini JSON, Codex session files) can be processed through `convo_miner.py` to extract structured memories and file them into the Anaktoron.
 
-Used to bootstrap an Anaktoron from months of prior conversation history. Not a real-time tool — run once, or periodically on new log dumps.
+Used to bootstrap an Anaktoron from months of prior conversation history.
 
 Output: `distilled` wing, rooms: `decision | preference | project_fact | tech_fact | milestone | personal`.
 
@@ -180,7 +180,7 @@ This matters for the auto-stop feature: the server is shared state across all pr
 
 ### Problem
 
-Storage is not memory. An AI connected to a Mnemion MCP server has 24 tools available — but without explicit instructions, it will not call them. The behavioral gap between "having tools" and "using tools correctly" is the real problem for AI memory systems.
+Storage is not memory. An AI connected to a Mnemion MCP server has 25 tools available — but without explicit instructions, it will not call them. The behavioral gap between "having tools" and "using tools correctly" is the real problem for AI memory systems.
 
 Specifically: the Anaktoron's behavioral protocol (when to call `status`, when to search, when to save, when to write the diary) was only returned *inside* the `tool_status` result — a circular dependency where the AI needed to already know to call the tool before it could receive the instruction to call the tool.
 
@@ -224,28 +224,35 @@ In production memory Anaktorons with high-density technical logs or repetitive c
 
 ### Implementation: SIGReg Latent Grooming
 
-Inspired by **LeWorldModel (Maes et al., 2026)**, we implemented a self-organizing latent manifold.
-
 1. **SIGReg (Sketched Isotropic Gaussian Regularization)**: During ingestion (`add_drawer`), we calculate the **Epps-Pulley test statistic** on random projections of the current embedding cluster.
-2. **Angular Spreading**: If a new memory is detected as contributing to a collapsed cluster, we apply a gradient-based "Grooming" step. This pushes the memory vector away from the cluster center on the hypersphere (Angular Spreading) while maintaining its core semantic meaning.
-3. **Diversity Optimization**: We prioritize spreading (Diversity Loss) over centering (Normality Loss) to aggressively break clusters in noisy datasets.
+2. **LatentAdapter**: A linear projection initialized to identity, trained with a three-term loss: semantic preservation (MSE vs original), diversity (cosine similarity penalty), and SIGReg (Gaussian normality).
+3. **Gradient-based Grooming**: Over 10 iterations, the adapter pushes embeddings apart on the manifold while preserving semantic structure.
 
-**Benchmark (Stress Test - highly similar technical files):**
-- **Ungroomed similarity**: 0.9899 (near identical)
+**A/B Benchmark (2,000-drawer test Anaktoron, 20 planted needles):**
+
+| Pipeline | Recall@5 | Recall@10 | MRR | Latency |
+|----------|----------|-----------|-----|----------|
+| Raw ChromaDB | 0.600 | 0.600 | 0.600 | 96ms |
+| **SIGReg Groomed** | **1.000** | **1.000** | **1.000** | 99ms |
+
+*Reproduce: `python tests/benchmarks/bench_ab_test.py`*
+
+Latent diversity metric (separate test, highly similar technical files):
+- **Ungroomed similarity**: 0.9899
 - **Groomed similarity**: 0.8647
-- **Improvement**: **+12.6% increase in latent diversity** without loss of semantic integrity.
+- **Improvement**: +12.6% increase in latent diversity
 
 ### Predictive Context (JEPA)
 
-Mnemion v3.4 transitions from a passive database to a **Joint-Embedding Predictive Architecture (JEPA)**.
+Mnemion v3.3 includes a session-aware predictor inspired by JEPA principles.
 
 1. **Latent Trajectory Tracking**: A `SessionTracker` records the sequence of embeddings accessed during a chat session.
-2. **Mean-Drift Predictor**: A zero-order JEPA implementation extrapolates the user's "latent intent" based on recent history.
-3. **Proactive Retrieval**: The `mnemion_predict_next` tool allows AI agents to anticipate the next relevant Room or Topic, pre-fetching context before an explicit search is triggered.
+2. **LSTM Predictor**: A single-layer LSTM trained on session embedding sequences to predict the next latent state. Weights are loaded once at init and cached.
+3. **Proactive Retrieval**: The `mnemion_predict_next` MCP tool allows AI agents to anticipate the next relevant Room or Topic, pre-fetching context before an explicit search is triggered.
 
 ### Latent Space Diagnostics
 
-We introduced a surgical benchmarking suite (`benchmarks/latent_health.py`) to quantify the physical structure of the memory Anaktoron:
+Diagnostic suite (`benchmarks/latent_health.py`) to quantify the physical structure of the memory Anaktoron:
 - **Cosine Similarity Stats**: Measures latent density and cluster health.
 - **Normality Stats**: Measures Skewness and Kurtosis relative to an ideal Gaussian distribution.
 - **Spreading Score**: Validates the effectiveness of the grooming logic.

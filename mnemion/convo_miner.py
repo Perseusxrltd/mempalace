@@ -16,6 +16,9 @@ from datetime import datetime
 from collections import defaultdict
 
 import chromadb
+import sqlite3
+from .drawer_trust import DrawerTrust
+from .knowledge_graph import KnowledgeGraph
 
 from .config import DRAWER_HNSW_METADATA
 from .normalize import normalize
@@ -378,6 +381,24 @@ def mine_convos(
                         }
                     ],
                 )
+                
+                # 2. Add to SQLite FTS5 (Lexical Mirror)
+                kg_path = str(Path(palace_path).parent / "knowledge_graph.sqlite3")
+                KnowledgeGraph(kg_path) # Ensure schema exists
+                conn = sqlite3.connect(kg_path)
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO drawers_fts (drawer_id, content, wing, room) VALUES (?, ?, ?, ?)",
+                        (drawer_id, chunk["content"], wing, chunk_room),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+
+                # 3. Create trust record (idempotent)
+                trust_db = DrawerTrust(kg_path)
+                trust_db.create(drawer_id, wing=wing, room=chunk_room)
+
                 drawers_added += 1
             except Exception as e:
                 if "already exists" not in str(e).lower():

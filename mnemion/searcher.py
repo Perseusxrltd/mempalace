@@ -4,6 +4,12 @@ searcher.py — Find anything. Exact words.
 
 Semantic search against the Anaktoron.
 Returns verbatim text — the actual words, never summaries.
+
+.. deprecated::
+    This module performs pure vector search only. For production retrieval
+    (hybrid vector+FTS, trust filtering, KG injection), use
+    ``hybrid_searcher.HybridSearcher`` instead. This module is retained
+    for backward compatibility and legacy tests.
 """
 
 import logging

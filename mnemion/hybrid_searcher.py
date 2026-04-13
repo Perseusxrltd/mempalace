@@ -14,6 +14,7 @@ Algorithm:
     where k is a smoothing constant (default 60).
 """
 
+import hashlib
 import logging
 import re
 import sqlite3
@@ -305,6 +306,43 @@ class HybridSearcher:
         """
         if self.collection is None:
             return []
+            
+        # -- ACTIVE FIX: Temporal Knowledge Graph Injection --
+        kg_hits = []
+        try:
+            from .knowledge_graph import KnowledgeGraph
+            kg = KnowledgeGraph(self.kg_path)
+            
+            # Simple lightweight heuristic extraction (capitalized terms > 2 chars)
+            tokens = re.findall(r'\b[A-Z][a-z]+\b', query)
+            distinct_entities = set(t for t in tokens if len(t) > 2)
+            
+            for ent in distinct_entities:
+                triples = kg.query_entity(ent, direction="both")
+                
+                # Format valid triples into synthetic RAG hits
+                for t in triples:
+                    if t.get("current", False):
+                        fact_str = f"[TEMPORAL GRAPH DATA]: {t['subject']} {t['predicate'].replace('_', ' ')} {t['object']}."
+                        if t.get("valid_from"):
+                            fact_str += f" (Valid from: {t['valid_from']})"
+                        
+                        kg_hits.append({
+                            "id": f"kg_{hashlib.md5(fact_str.encode()).hexdigest()[:16]}",
+                            "text": fact_str,
+                            "wing": "temporal_graph",
+                            "room": "fact",
+                            "source": "knowledge_graph.sqlite3",
+                            "score": 1.0,  # Max score for strict graph facts
+                            "trust_status": "current",
+                            "confidence": t.get("confidence", 1.0),
+                            "embedding": None
+                        })
+        except Exception as e:
+            logger.debug(f"KG Injection failed non-fatally: {e}")
+            
+        kg_hits = kg_hits[:3] # Cap to top 3 pristine facts
+
         # 1. Gather candidates from both engines (fetch more to allow for trust filtering)
         fetch_limit = max(50, n_results * 10)
         vector_ids = self._vector_search(query, wing, room, limit=fetch_limit)
@@ -375,4 +413,4 @@ class HybridSearcher:
                     hit["warning"] = "⚠ This memory is contested — accuracy uncertain"
                 hits.append(hit)
 
-        return hits
+        return kg_hits + hits

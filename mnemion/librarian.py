@@ -291,12 +291,27 @@ def run_librarian(
             new_room = _suggest_room(backend, text, current_room)
             if new_room and not dry_run:
                 conn = sqlite3.connect(kg_path)
-                conn.execute(
-                    "UPDATE drawer_trust SET room = ?, updated_at = ? WHERE drawer_id = ?",
-                    (new_room, datetime.now(timezone.utc).isoformat(), drawer_id),
-                )
-                conn.commit()
-                conn.close()
+                try:
+                    conn.execute(
+                        "UPDATE drawer_trust SET room = ?, updated_at = ? WHERE drawer_id = ?",
+                        (new_room, datetime.now(timezone.utc).isoformat(), drawer_id),
+                    )
+                    conn.execute(
+                        "UPDATE drawers_fts SET room = ? WHERE drawer_id = ?",
+                        (new_room, drawer_id),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+
+                # Sync Fix: Push metadata to ChromaDB Vector Store
+                try:
+                    c_metadata = collection.get(ids=[drawer_id])["metadatas"][0]
+                    c_metadata["room"] = new_room
+                    collection.update(ids=[drawer_id], metadatas=[c_metadata])
+                except Exception as e:
+                    logger.error(f"Failed to sync re-classification to Chroma: {e}")
+                
                 stats["reclassified"] += 1
                 logger.info(f"  reclassified {drawer_id[:16]}: general → {new_room}")
 
@@ -315,6 +330,19 @@ def run_librarian(
                         stats["kg_triples_added"] += 1
                     except Exception as e:
                         logger.error(f"Suppressed error in execution: {e}")
+
+            # ── Task 4: Entity learning ───────────────────────────────────────
+            if not dry_run:
+                try:
+                    from .entity_registry import EntityRegistry
+                    registry = EntityRegistry.load()
+                    new_entities = registry.learn_from_text(text)
+                    if new_entities:
+                        logger.info(
+                            f"  learned {len(new_entities)} entities from {drawer_id[:16]}"
+                        )
+                except Exception as e:
+                    logger.debug(f"Entity learning skipped: {e}")
 
             # ── Mark as verified (won't be picked up next run) ───────────────
             if not dry_run:
