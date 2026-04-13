@@ -395,6 +395,14 @@ Mnemion began as a fork of [milla-jovovich/mempalace](https://github.com/milla-j
 
 ## Changelog
 
+### v3.3.5 — Restore: streaming JSON, O(batch) peak memory
+
+The previous restore called `json.load()` on the full export before processing. For a 58 MB / 33k-drawer archive this materialises as ~500 MB–1 GB of Python objects, which — on top of ChromaDB's sentence-transformer (~90 MB) — triggers OOM/SIGKILL before even 3% of the archive is written.
+
+- **`_stream_json_array()`**: yields one drawer at a time using `JSONDecoder.raw_decode()` with a 512 KB rolling file buffer. Peak memory is now `O(batch_size)` regardless of archive size.
+- **`_count_json_objects()`**: fast byte scan (`b'"id":'`) counts drawers in ~20 ms without any JSON parsing, so `%` progress still works.
+- The full export never exists as a Python list during restore.
+
 ### v3.3.2 — Restore: OOM fix, progress output, --batch-size
 
 - **Restore batch size reduced from 500 → 50** (default). ChromaDB embeds every document on write; large batches on big archives (33k+ drawers, 22k chars average) caused SIGKILL from OOM on memory-constrained hosts.
