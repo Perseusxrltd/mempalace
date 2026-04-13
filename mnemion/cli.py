@@ -301,8 +301,11 @@ def cmd_restore(args):
         docs = [d["content"] for d in batch]
         # Strip None values and non-scalar types (ChromaDB requirement)
         clean_metas = [
-            {k: v for k, v in (d.get("meta") or {}).items()
-             if isinstance(v, (str, int, float, bool))}
+            {
+                k: v
+                for k, v in (d.get("meta") or {}).items()
+                if isinstance(v, (str, int, float, bool))
+            }
             for d in batch
         ]
         try:
@@ -815,7 +818,9 @@ def main():
         "restore",
         help="Import a JSON export (archive/drawers_export.json) into the local palace",
     )
-    p_restore.add_argument("file", help="Path to the JSON export file (e.g. archive/drawers_export.json)")
+    p_restore.add_argument(
+        "file", help="Path to the JSON export file (e.g. archive/drawers_export.json)"
+    )
     p_restore.add_argument(
         "--merge",
         action="store_true",

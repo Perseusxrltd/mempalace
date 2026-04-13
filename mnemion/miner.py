@@ -666,6 +666,7 @@ def mine(
 def status(palace_path: str):
     """Show what's been filed in the palace."""
     from .config import MempalaceConfig
+
     col_name = MempalaceConfig().collection_name
     try:
         client = chromadb.PersistentClient(path=palace_path)
