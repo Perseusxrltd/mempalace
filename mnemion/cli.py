@@ -13,6 +13,8 @@ Commands:
     mnemion split <dir>                 Split concatenated mega-files into per-session files
     mnemion mine <dir>                  Mine project files (default)
     mnemion mine <dir> --mode convos    Mine conversation exports
+    mnemion restore <file.json>         Import a JSON export into the palace (new machine setup)
+    mnemion restore <file.json> --merge Add to an existing palace without wiping it
     mnemion search "query"              Find anything, exact words
     mnemion wake-up                     Show L0 + L1 wake-up context
     mnemion wake-up --wing my_app       Wake-up for a specific project
@@ -168,7 +170,9 @@ def cmd_repair(args):
     import chromadb
     import shutil
 
-    palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
+    cfg = MempalaceConfig()
+    palace_path = os.path.expanduser(args.palace) if args.palace else cfg.palace_path
+    col_name = cfg.collection_name
 
     if not os.path.isdir(palace_path):
         print(f"\n  No palace found at {palace_path}")
@@ -177,12 +181,13 @@ def cmd_repair(args):
     print(f"\n{'=' * 55}")
     print("  Mnemion Repair")
     print(f"{'=' * 55}\n")
-    print(f"  Palace: {palace_path}")
+    print(f"  Palace:     {palace_path}")
+    print(f"  Collection: {col_name}")
 
     # Try to read existing drawers
     try:
         client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mnemion_drawers")
+        col = client.get_collection(col_name)
         total = col.count()
         print(f"  Drawers found: {total}")
     except Exception as e:
@@ -217,8 +222,8 @@ def cmd_repair(args):
     shutil.copytree(palace_path, backup_path)
 
     print("  Rebuilding collection...")
-    client.delete_collection("mnemion_drawers")
-    new_col = client.create_collection("mnemion_drawers")
+    client.delete_collection(col_name)
+    new_col = client.create_collection(col_name)
 
     filed = 0
     for i in range(0, len(all_ids), batch_size):
@@ -232,6 +237,86 @@ def cmd_repair(args):
     print(f"\n  Repair complete. {filed} drawers rebuilt.")
     print(f"  Backup saved at {backup_path}")
     print(f"\n{'=' * 55}\n")
+
+
+def cmd_restore(args):
+    """Import a JSON export (archive/drawers_export.json) into the local palace."""
+    import json
+    import chromadb
+    from pathlib import Path
+    from .config import MempalaceConfig, DRAWER_HNSW_METADATA
+
+    cfg = MempalaceConfig()
+    palace_path = os.path.expanduser(args.palace) if args.palace else cfg.palace_path
+    col_name = cfg.collection_name
+    json_file = args.file
+
+    if not os.path.isfile(json_file):
+        print(f"\n  File not found: {json_file}\n")
+        sys.exit(1)
+
+    print(f"\n{'=' * 55}")
+    print("  Mnemion Restore")
+    print(f"{'=' * 55}\n")
+    print(f"  Source:     {json_file}")
+    print(f"  Palace:     {palace_path}")
+    print(f"  Collection: {col_name}\n")
+
+    with open(json_file, "r", encoding="utf-8") as f:
+        drawers = json.load(f)
+
+    if not isinstance(drawers, list):
+        print("  Error: expected a JSON array of drawer objects.\n")
+        sys.exit(1)
+
+    print(f"  {len(drawers)} drawers in export...")
+
+    Path(palace_path).mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=palace_path)
+
+    try:
+        col = client.get_or_create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
+    except Exception as e:
+        print(f"  Error opening palace: {e}\n")
+        sys.exit(1)
+
+    existing = col.count()
+    if existing > 0 and not args.merge and not args.replace:
+        print(f"  Palace already has {existing} drawers.")
+        print("  Use --merge to add to an existing palace, or --replace to overwrite.\n")
+        sys.exit(1)
+
+    if args.replace and existing > 0:
+        print(f"  Replacing {existing} existing drawers...")
+        client.delete_collection(col_name)
+        col = client.create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
+
+    BATCH = 500
+    filed = 0
+    skipped = 0
+
+    for i in range(0, len(drawers), BATCH):
+        batch = drawers[i : i + BATCH]
+        ids = [d["id"] for d in batch]
+        docs = [d["content"] for d in batch]
+        # Strip None values and non-scalar types (ChromaDB requirement)
+        clean_metas = [
+            {k: v for k, v in (d.get("meta") or {}).items()
+             if isinstance(v, (str, int, float, bool))}
+            for d in batch
+        ]
+        try:
+            col.upsert(ids=ids, documents=docs, metadatas=clean_metas)
+            filed += len(batch)
+            print(f"  Restored {filed}/{len(drawers)} drawers...")
+        except Exception as e:
+            print(f"  Error at batch {i}: {e}")
+            skipped += len(batch)
+
+    print(f"\n  Done. {filed} drawers restored" + (f", {skipped} skipped." if skipped else "."))
+    if filed > 0:
+        print("  Run 'mnemion status' to verify.\n")
+    print(f"{'=' * 55}\n")
 
 
 def cmd_llm(args):
@@ -462,7 +547,9 @@ def cmd_compress(args):
     import chromadb
     from .dialect import Dialect
 
-    palace_path = os.path.expanduser(args.palace) if args.palace else MempalaceConfig().palace_path
+    cfg = MempalaceConfig()
+    palace_path = os.path.expanduser(args.palace) if args.palace else cfg.palace_path
+    col_name = cfg.collection_name
 
     # Load dialect (with optional entity config)
     config_path = args.config
@@ -481,7 +568,7 @@ def cmd_compress(args):
     # Connect to palace
     try:
         client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mnemion_drawers")
+        col = client.get_collection(col_name)
     except Exception:
         print(f"\n  No palace found at {palace_path}")
         print("  Run: mnemion init <dir> then mnemion mine <dir>")
@@ -723,6 +810,23 @@ def main():
     llm_sub.add_parser("start", help="Start the LLM server (auto-start must be configured)")
     llm_sub.add_parser("stop", help="Stop the LLM server")
 
+    # restore
+    p_restore = sub.add_parser(
+        "restore",
+        help="Import a JSON export (archive/drawers_export.json) into the local palace",
+    )
+    p_restore.add_argument("file", help="Path to the JSON export file (e.g. archive/drawers_export.json)")
+    p_restore.add_argument(
+        "--merge",
+        action="store_true",
+        help="Add imported drawers to an existing palace (default: abort if palace not empty)",
+    )
+    p_restore.add_argument(
+        "--replace",
+        action="store_true",
+        help="Wipe the existing palace and restore from the export",
+    )
+
     # repair
     sub.add_parser(
         "repair",
@@ -781,6 +885,7 @@ def main():
     dispatch = {
         "init": cmd_init,
         "mine": cmd_mine,
+        "restore": cmd_restore,
         "split": cmd_split,
         "search": cmd_search,
         "compress": cmd_compress,

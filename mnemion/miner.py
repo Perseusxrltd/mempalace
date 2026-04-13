@@ -395,16 +395,18 @@ def chunk_text(content: str, source_file: str) -> list:
 # =============================================================================
 
 
-def get_collection(palace_path: str):
-    os.makedirs(palace_path, exist_ok=True)
+def get_collection(palace_path: str, collection_name: str = None):
     from .chroma_compat import fix_blob_seq_ids
+    from .config import MempalaceConfig
 
+    col_name = collection_name or MempalaceConfig().collection_name
+    os.makedirs(palace_path, exist_ok=True)
     fix_blob_seq_ids(palace_path)
     client = chromadb.PersistentClient(path=palace_path)
     try:
-        return client.get_collection("mnemion_drawers")
+        return client.get_collection(col_name)
     except Exception:
-        return client.create_collection("mnemion_drawers", metadata=DRAWER_HNSW_METADATA)
+        return client.create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
 
 
 def file_already_mined(collection, source_file: str) -> bool:
@@ -663,9 +665,11 @@ def mine(
 
 def status(palace_path: str):
     """Show what's been filed in the palace."""
+    from .config import MempalaceConfig
+    col_name = MempalaceConfig().collection_name
     try:
         client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mnemion_drawers")
+        col = client.get_collection(col_name)
     except Exception:
         print(f"\n  No palace found at {palace_path}")
         print("  Run: mnemion init <dir> then mnemion mine <dir>")

@@ -11,6 +11,8 @@ from pathlib import Path
 
 import chromadb
 
+from .config import MempalaceConfig
+
 logger = logging.getLogger("mnemion_mcp")
 
 
@@ -25,14 +27,16 @@ def search(
     room: str = None,
     n_results: int = 5,
     min_similarity: float = 0.0,
+    collection_name: str = None,
 ):
     """
     Search the palace. Returns verbatim drawer content.
     Optionally filter by wing (project) or room (aspect).
     """
+    col_name = collection_name or MempalaceConfig().collection_name
     try:
         client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mnemion_drawers")
+        col = client.get_collection(col_name)
     except Exception:
         print(f"\n  No palace found at {palace_path}")
         print("  Run: mnemion init <dir> then mnemion mine <dir>")
@@ -112,14 +116,16 @@ def search_memories(
     room: str = None,
     n_results: int = 5,
     min_similarity: float = 0.0,
+    collection_name: str = None,
 ) -> dict:
     """
     Programmatic search — returns a dict instead of printing.
     Used by the MCP server and other callers that need data.
     """
+    col_name = collection_name or MempalaceConfig().collection_name
     try:
         client = chromadb.PersistentClient(path=palace_path)
-        col = client.get_collection("mnemion_drawers")
+        col = client.get_collection(col_name)
     except Exception as e:
         logger.error("No palace found at %s: %s", palace_path, e)
         return {

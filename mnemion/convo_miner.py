@@ -212,13 +212,16 @@ def detect_convo_room(content: str) -> str:
 # =============================================================================
 
 
-def get_collection(palace_path: str):
+def get_collection(palace_path: str, collection_name: str = None):
+    from .config import MempalaceConfig
+
+    col_name = collection_name or MempalaceConfig().collection_name
     os.makedirs(palace_path, exist_ok=True)
     client = chromadb.PersistentClient(path=palace_path)
     try:
-        return client.get_collection("mnemion_drawers")
+        return client.get_collection(col_name)
     except Exception:
-        return client.create_collection("mnemion_drawers", metadata=DRAWER_HNSW_METADATA)
+        return client.create_collection(col_name, metadata=DRAWER_HNSW_METADATA)
 
 
 def file_already_mined(collection, source_file: str) -> bool:
