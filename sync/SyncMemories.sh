@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mnemion Multi-Agent Sync — Linux / macOS (Bash)
 # =================================================
-# Exports the local palace to JSON, merges with remote if needed, commits,
+# Exports the local Anaktoron to JSON, merges with remote if needed, commits,
 # and pushes.  Safe for concurrent use by multiple agents on different machines.
 #
 # How it works:
@@ -49,7 +49,7 @@ fi
 if [ -n "${MNEMION_SOURCE_DIR:-}" ]; then
     SRC_DIR="$MNEMION_SOURCE_DIR"
 else
-    # Script lives in ~/.mnemion/ — source is the mempalace repo if co-located
+    # Script lives in ~/.mnemion/ — source is the mnemion repo if co-located
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     PARENT_DIR="$(dirname "$SCRIPT_DIR")"
     if [ -d "$PARENT_DIR/mnemion" ]; then
@@ -126,13 +126,13 @@ if "$SRC_DIR":
     sys.path.insert(0, "$SRC_DIR")
 import chromadb
 from mnemion.chroma_compat import fix_blob_seq_ids
-from mnemion.config import MempalaceConfig
+from mnemion.config import MnemionConfig
 
-config = MempalaceConfig()
-fix_blob_seq_ids(config.palace_path)
+config = MnemionConfig()
+fix_blob_seq_ids(config.anaktoron_path)
 BATCH = 2000  # stay under SQLite SQLITE_MAX_VARIABLE_NUMBER on any version
 try:
-    client  = chromadb.PersistentClient(path=config.palace_path)
+    client  = chromadb.PersistentClient(path=config.anaktoron_path)
     col     = client.get_collection(config.collection_name)
     drawers = []
     offset  = 0

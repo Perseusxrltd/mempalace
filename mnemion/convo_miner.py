@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-convo_miner.py — Mine conversations into the palace.
+convo_miner.py — Mine conversations into the Anaktoron.
 
 Ingests chat exports (Claude Code, ChatGPT, Slack, plain text transcripts).
-Normalizes format, chunks by exchange pair (Q+A = one unit), files to palace.
+Normalizes format, chunks by exchange pair (Q+A = one unit), files to Anaktoron.
 
-Same palace as project mining. Different ingest strategy.
+Same Anaktoron as project mining. Different ingest strategy.
 """
 
 import os
@@ -208,7 +208,7 @@ def detect_convo_room(content: str) -> str:
 
 
 # =============================================================================
-# PALACE OPERATIONS
+# ANAKTORON OPERATIONS
 # =============================================================================
 
 
@@ -266,7 +266,7 @@ def mine_convos(
     dry_run: bool = False,
     extract_mode: str = "exchange",
 ):
-    """Mine a directory of conversation files into the palace.
+    """Mine a directory of conversation files into the Anaktoron.
 
     extract_mode:
         "exchange" — default exchange-pair chunking (Q+A = one unit)
@@ -401,7 +401,7 @@ def mine_convos(
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python convo_miner.py <convo_dir> [--palace PATH] [--limit N] [--dry-run]")
+        print("Usage: python convo_miner.py <convo_dir> [--anaktoron PATH] [--limit N] [--dry-run]")
         sys.exit(1)
     from .config import MempalaceConfig
 

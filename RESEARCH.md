@@ -22,7 +22,7 @@ In high-entropy technical environments, vector-only retrieval exhibits a "Vector
 
 **Latency overhead** — RRF fusion adds <5ms to retrieval. The FTS5 write is synchronous and adds <1ms to save.
 
-### Benchmark (4,344-drawer production palace, 15-target Gold Standard)
+### Benchmark (4,344-drawer production Anaktoron, 15-target Gold Standard)
 
 | Metric | Vector Only | Hybrid RRF | Delta |
 |--------|-------------|------------|-------|
@@ -71,7 +71,7 @@ any → historical       (drawer deleted — ghost record for audit)
 - If confidence < 0.8 → escalate to Stage 2
 
 **Stage 2 — Context-Enriched Resolve (ambiguous cases only)**
-- Pull 3 additional palace context snippets for each conflicting drawer
+- Pull 3 additional Anaktoron context snippets for each conflicting drawer
 - Second LLM pass with enriched context
 - Resolves or marks both as `contested` if still ambiguous
 
@@ -116,7 +116,7 @@ drawer_trust_history -- append-only audit trail of every state change
 
 ### Problem
 
-The original save hook works by nudging the AI at intervals, asking it to save to the palace. This has two failure modes:
+The original save hook works by nudging the AI at intervals, asking it to save to the Anaktoron. This has two failure modes:
 1. The AI may not cooperate (ignores the instruction, or the block gets swallowed)
 2. The AI interrupts the conversation, which creates friction
 
@@ -138,9 +138,9 @@ The pattern-based extractor covers: decisions, preferences, milestones, problems
 
 ## Contribution 4: LLM History Mining (`llm_miner.py`)
 
-A standalone script that processes all historical AI conversation logs (Claude JSONL, Gemini JSON, Codex session files) through a local LLM (vLLM/Ollama) to extract structured memories and file them into the palace.
+A standalone script that processes all historical AI conversation logs (Claude JSONL, Gemini JSON, Codex session files) through a local LLM (vLLM/Ollama) to extract structured memories and file them into the Anaktoron.
 
-Used to bootstrap a palace from months of prior conversation history. Not a real-time tool — run once, or periodically on new log dumps.
+Used to bootstrap an Anaktoron from months of prior conversation history. Not a real-time tool — run once, or periodically on new log dumps.
 
 Output: `distilled` wing, rooms: `decision | preference | project_fact | tech_fact | milestone | personal`.
 
@@ -172,7 +172,7 @@ A daemon watcher thread checks every 30s. If `_last_chat_time` exceeds `idle_tim
 
 `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` (Windows) ensures the vLLM server is not a child of the Python process — it's an independent OS-level process. When mnemion exits (or the MCP server restarts), the server keeps running. Only `backend.stop()` or a manual kill terminates it.
 
-This matters for the auto-stop feature: the server is shared state across all processes using the palace.
+This matters for the auto-stop feature: the server is shared state across all processes using the Anaktoron.
 
 ---
 
@@ -182,7 +182,7 @@ This matters for the auto-stop feature: the server is shared state across all pr
 
 Storage is not memory. An AI connected to a Mnemion MCP server has 24 tools available — but without explicit instructions, it will not call them. The behavioral gap between "having tools" and "using tools correctly" is the real problem for AI memory systems.
 
-Specifically: the palace's behavioral protocol (when to call `status`, when to search, when to save, when to write the diary) was only returned *inside* the `tool_status` result — a circular dependency where the AI needed to already know to call the tool before it could receive the instruction to call the tool.
+Specifically: the Anaktoron's behavioral protocol (when to call `status`, when to search, when to save, when to write the diary) was only returned *inside* the `tool_status` result — a circular dependency where the AI needed to already know to call the tool before it could receive the instruction to call the tool.
 
 ### Solution: three independent layers
 
@@ -191,7 +191,7 @@ Each layer solves the bootstrap independently. A client needs only one to work c
 **Layer 1 — MCP tool descriptions (universal)**
 
 Every MCP client reads tool descriptions before taking any action. We changed:
-- `mnemion_status` → "CALL THIS FIRST at every session start. Returns your behavioral protocol, AAAK memory dialect spec, and palace overview."
+- `mnemion_status` → "CALL THIS FIRST at every session start. Returns your behavioral protocol, AAAK memory dialect spec, and Anaktoron overview."
 - `mnemion_search` → "Use BEFORE answering any question about past events, people, projects — verify, don't guess."
 - `mnemion_add_drawer` → "Call when you learn a new fact or something changes."
 - `mnemion_diary_write` → "Call AT END OF EVERY SESSION."
@@ -213,3 +213,39 @@ A copy-paste template for every major AI platform:
 ### Why CLAUDE.md is the most reliable layer for Claude Code
 
 Claude Code reads `~/.claude/CLAUDE.md` before any conversation starts — before tools are listed, before MCP servers connect. This means the protocol is injected even in sessions where something goes wrong with the MCP connection. It's the only truly zero-dependency bootstrap path for Claude Code.
+
+---
+
+## Contribution 7: LeWorldModel (LeWM) Integration — Self-Organizing World Model (v3.4)
+
+### Problem: Embedding Collapse (The "Blob" Effect)
+
+In production memory Anaktorons with high-density technical logs or repetitive chat histories, embeddings tend to cluster tightly together. This "Embedding Collapse" makes semantic search imprecise, as the database cannot effectively differentiate between similar but distinct memories.
+
+### Implementation: SIGReg Latent Grooming
+
+Inspired by **LeWorldModel (Maes et al., 2026)**, we implemented a self-organizing latent manifold.
+
+1. **SIGReg (Sketched Isotropic Gaussian Regularization)**: During ingestion (`add_drawer`), we calculate the **Epps-Pulley test statistic** on random projections of the current embedding cluster.
+2. **Angular Spreading**: If a new memory is detected as contributing to a collapsed cluster, we apply a gradient-based "Grooming" step. This pushes the memory vector away from the cluster center on the hypersphere (Angular Spreading) while maintaining its core semantic meaning.
+3. **Diversity Optimization**: We prioritize spreading (Diversity Loss) over centering (Normality Loss) to aggressively break clusters in noisy datasets.
+
+**Benchmark (Stress Test - highly similar technical files):**
+- **Ungroomed similarity**: 0.9899 (near identical)
+- **Groomed similarity**: 0.8647
+- **Improvement**: **+12.6% increase in latent diversity** without loss of semantic integrity.
+
+### Predictive Context (JEPA)
+
+Mnemion v3.4 transitions from a passive database to a **Joint-Embedding Predictive Architecture (JEPA)**.
+
+1. **Latent Trajectory Tracking**: A `SessionTracker` records the sequence of embeddings accessed during a chat session.
+2. **Mean-Drift Predictor**: A zero-order JEPA implementation extrapolates the user's "latent intent" based on recent history.
+3. **Proactive Retrieval**: The `mnemion_predict_next` tool allows AI agents to anticipate the next relevant Room or Topic, pre-fetching context before an explicit search is triggered.
+
+### Latent Space Diagnostics
+
+We introduced a surgical benchmarking suite (`benchmarks/latent_health.py`) to quantify the physical structure of the memory Anaktoron:
+- **Cosine Similarity Stats**: Measures latent density and cluster health.
+- **Normality Stats**: Measures Skewness and Kurtosis relative to an ideal Gaussian distribution.
+- **Spreading Score**: Validates the effectiveness of the grooming logic.

@@ -1,6 +1,6 @@
 # Mnemion Multi-Agent Sync  -  Windows (PowerShell)
 # ===================================================
-# Exports the local palace to JSON, merges with remote if needed, commits,
+# Exports the local Anaktoron to JSON, merges with remote if needed, commits,
 # and pushes.  Safe for concurrent use by multiple agents on different machines.
 #
 # How it works:
@@ -111,14 +111,14 @@ if r'$SrcDir':
     sys.path.insert(0, r'$SrcDir')
 import chromadb
 from mnemion.chroma_compat import fix_blob_seq_ids
-from mnemion.config import MempalaceConfig
+from mnemion.config import MnemionConfig
 
 BATCH = 2000  # stay under SQLite SQLITE_MAX_VARIABLE_NUMBER on any version
 
-config = MempalaceConfig()
-fix_blob_seq_ids(config.palace_path)
+config = MnemionConfig()
+fix_blob_seq_ids(config.anaktoron_path)
 try:
-    client = chromadb.PersistentClient(path=config.palace_path)
+    client = chromadb.PersistentClient(path=config.anaktoron_path)
     col    = client.get_collection(config.collection_name)
     drawers = []
     offset  = 0

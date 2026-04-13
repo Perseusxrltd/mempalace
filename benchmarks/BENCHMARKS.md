@@ -46,7 +46,7 @@ Both are real. Both are reproducible. Neither is the whole picture alone.
 | 1 | **MemPal (hybrid v4 + rerank)** | **100%** | Optional | Haiku | Reproducible, 500/500 |
 | 2 | Supermemory ASMR | ~99% | Yes | Undisclosed | Research only, not in production |
 | 3 | MemPal (hybrid v3 + rerank) | 99.4% | Optional | Haiku | Reproducible |
-| 3 | MemPal (palace + rerank) | 99.4% | Optional | Haiku | Independent architecture |
+| 3 | MemPal (Anaktoron + rerank) | 99.4% | Optional | Haiku | Independent architecture |
 | 4 | Mastra | 94.87% | Yes | GPT-5-mini | — |
 | 5 | **MemPal (raw, no LLM)** | **96.6%** | **None** | **None** | **Highest zero-API score published** |
 | 6 | Hindsight | 91.4% | Yes | Gemini-3 | — |
@@ -96,9 +96,9 @@ MemPal is more than 2× Mem0 on this benchmark. With Sonnet rerank, MemPal reach
 | **Hybrid v5 (top-10)** | 83.7% | **88.9%** | None | Beats Memori 81.95% — honest score |
 | **Wings v3 speaker-owned closets (top-10)** | — | **85.7%** | None | Adversarial 92.8% — speaker ownership solves speaker confusion |
 | **Wings v2 concept closets (top-10)** | — | **75.6%** | None | Adversarial 80.0%; single-hop 49% drags overall |
-| **Palace v2 (top-10, 3 rooms)** | 75.6% | **84.8%** | Haiku (index) | Room assignment at index; summary routing at query |
+| **Anaktoron v2 (top-10, 3 rooms)** | 75.6% | **84.8%** | Haiku (index) | Room assignment at index; summary routing at query |
 | Wings v1 (broken — filter not boost) | — | 58.0% | None | Speaker WHERE filter discarded evidence; 5.4% coverage |
-| Palace v1 (top-5, global LLM routing) | 34.2% | — | Haiku (both) | Fails: taxonomy mismatch |
+| Anaktoron v1 (top-5, global LLM routing) | 34.2% | — | Haiku (both) | Fails: taxonomy mismatch |
 | Session, no rerank (top-10) | — | 60.3% | None | Baseline |
 | Dialog, no rerank (top-10) | — | 48.0% | None | — |
 
@@ -238,7 +238,7 @@ Examples of what gets caught:
 
 **What changed:** Three targeted fixes for the three questions that failed in every previous mode.
 
-The remaining misses were identified by loading both the hybrid v3 and palace results and finding the exact questions that failed in *both* architectures — confirming they were hard limits, not luck.
+The remaining misses were identified by loading both the hybrid v3 and Anaktoron results and finding the exact questions that failed in *both* architectures — confirming they were hard limits, not luck.
 
 **Fix 1 — Quoted phrase extraction** (miss: `'sexual compulsions'` assistant question):
 The question contained an exact quoted phrase in single quotes. Sessions containing that exact phrase now get a 60% distance reduction. The target session jumped from unranked to rank 1.
@@ -255,22 +255,22 @@ The target session said "I still remember the happy high school experiences such
 
 ---
 
-### Parallel Approach: Palace Mode + Haiku Rerank → 99.4% (independent convergence)
+### Parallel Approach: Anaktoron Mode + Haiku Rerank → 99.4% (independent convergence)
 
 Built independently from the hybrid track. Different architecture, same ceiling.
 
 **Architecture:**
 ```
-PALACE
+ANAKTORON
   └── HALL (concept: travel, work, health, relationships, general)
         └── Two-pass retrieval:
               Pass 1: tight search within inferred hall
               Pass 2: full haystack with hall-based score bonuses
 ```
 
-The palace classifies each question into one of 5 halls. Pass 1 searches only within that hall — high precision, catches the obvious match. Pass 2 searches the full corpus with the hall affinity as a tiebreaker — catches cases where the relevant session was miscategorized.
+The Anaktoron classifies each question into one of 5 halls. Pass 1 searches only within that hall — high precision, catches the obvious match. Pass 2 searches the full corpus with the hall affinity as a tiebreaker — catches cases where the relevant session was miscategorized.
 
-**Why this matters:** Two completely independent architectures (hybrid scoring vs. palace navigation) converged at exactly the same score (99.4%). This is the strongest possible validation of the retrieval ceiling. The ceiling is architectural, not a local maximum of any one approach.
+**Why this matters:** Two completely independent architectures (hybrid scoring vs. Anaktoron navigation) converged at exactly the same score (99.4%). This is the strongest possible validation of the retrieval ceiling. The ceiling is architectural, not a local maximum of any one approach.
 
 ---
 
@@ -295,7 +295,7 @@ The palace classifies each question into one of 5 halls. Pass 1 searches only wi
 | Hybrid v2 | 98.4% | — | None | $0 | ✅ Verified |
 | Hybrid v2 + rerank | 98.8% | — | Haiku | ~$0.001 | ✅ Verified |
 | Hybrid v3 + rerank | 99.4% | 0.983 | Haiku | ~$0.001 | ✅ Verified |
-| Palace + rerank | 99.4% | 0.983 | Haiku | ~$0.001 | ✅ Verified |
+| Anaktoron + rerank | 99.4% | 0.983 | Haiku | ~$0.001 | ✅ Verified |
 | Diary + rerank (98% cache) | 98.2% | 0.956 | Haiku | ~$0.001 | ✅ Partial — full run pending |
 | **Hybrid v4 + Haiku rerank** | **100%** | **0.976** | Haiku | ~$0.001 | ✅ Verified |
 | **Hybrid v4 + Sonnet rerank** | **100%** | **0.975** | Sonnet | ~$0.003 | ✅ Verified |
@@ -362,12 +362,12 @@ python benchmarks/longmemeval_bench.py \
   --api-key $ANTHROPIC_API_KEY
 ```
 
-### Palace + Haiku rerank (99.4%) — needs API key
+### Anaktoron + Haiku rerank (99.4%) — needs API key
 
 ```bash
 python benchmarks/longmemeval_bench.py \
   /tmp/longmemeval-data/longmemeval_s_cleaned.json \
-  --mode palace \
+  --mode Anaktoron \
   --llm-rerank \
   --api-key $ANTHROPIC_API_KEY
 ```
@@ -523,7 +523,7 @@ All raw results are committed:
 |---|---|---|---|
 | `results_raw_full500.jsonl` | raw | 96.6% | No LLM |
 | `results_hybrid_v3_rerank_full500.jsonl` | hybrid+rerank | 99.4% | Haiku |
-| `results_palace_rerank_full500.jsonl` | palace+rerank | 99.4% | Haiku |
+| `results_palace_rerank_full500.jsonl` | Anaktoron+rerank | 99.4% | Haiku |
 | `results_diary_haiku_rerank_full500.jsonl` | diary+rerank | 98.2% | 65% cache, partial |
 | `results_aaak_full500.jsonl` | aaak | 84.2% | Compressed sessions |
 | `results_rooms_full500.jsonl` | rooms | 89.4% | Session rooms |
@@ -532,8 +532,8 @@ All raw results are committed:
 | `results_locomo_hybrid_llmrerank_session_top50_20260325_1056.json` | locomo hybrid+rerank | 100% | Sonnet, 1986/1986 |
 | `results_lme_hybrid_v4_held_out_450_20260326_0010.json` | hybrid_v4 held-out | 98.4% R@5 | Clean — 450 unseen questions |
 | `results_locomo_hybrid_session_top10_*.json` | locomo hybrid_v5 | 88.9% R@10 | Honest — top-10, no rerank |
-| `results_locomo_palace_session_top5_20260326_0031.json` | locomo palace v2 | 75.6% R@5 | Summary-based routing, 3 rooms |
-| `results_locomo_palace_session_top10_20260326_0029.json` | locomo palace v2 | 84.8% R@10 | Summary-based routing, 3 rooms |
+| `results_locomo_palace_session_top5_20260326_0031.json` | locomo Anaktoron v2 | 75.6% R@5 | Summary-based routing, 3 rooms |
+| `results_locomo_palace_session_top10_20260326_0029.json` | locomo Anaktoron v2 | 84.8% R@10 | Summary-based routing, 3 rooms |
 | `palace_cache_locomo.json` | — | — | 272 session room assignments (Haiku) |
 | `diary_cache_haiku.json` | — | — | Pre-computed diary topics |
 
@@ -599,7 +599,7 @@ Beats Memori (81.95%) by 7pp with no reranking. Result file: `results_locomo_hyb
 
 ---
 
-### LoCoMo palace mode — LLM room assignment (RESULTS)
+### LoCoMo Anaktoron mode — LLM room assignment (RESULTS)
 
 **Architecture v1 (global taxonomy routing):** Haiku assigns each session to a room at index time. At query time, Haiku routes question to 1-2 rooms. **Result: 34.2% R@5** — 62.5% zero-recall. Failure: independent LLM calls with no shared context produced terminology mismatch between index-time labels and query-time routing.
 
@@ -609,12 +609,12 @@ Beats Memori (81.95%) by 7pp with no reranking. Result file: `results_locomo_hyb
 |---|---|---|---|---|
 | v1: global LLM routing | 34.2% | ~44% | 62.5% | Terminology mismatch |
 | v2: summary-based routing, top-2 rooms | 71.7% | 77.9% | 17.8% | Big fix |
-| **v2: summary-based routing, top-3 rooms** | **75.6%** | **84.8%** | **11.0%** | Best palace result |
+| **v2: summary-based routing, top-3 rooms** | **75.6%** | **84.8%** | **11.0%** | Best Anaktoron result |
 | Hybrid v5 (no rooms) | 83.7% | 88.9% | — | Comparison baseline |
 
-**Gap vs. hybrid_v5:** 4.1pp at R@10. The palace structure is working — room assignments are semantically correct (Caroline's identity dominates; Joanna+Nate in hobbies_creativity). The remaining gap is inherent to filtering: some sessions in room #4 or #5 by keyword score are missed even though they're relevant.
+**Gap vs. hybrid_v5:** 4.1pp at R@10. The Anaktoron structure is working — room assignments are semantically correct (Caroline's identity dominates; Joanna+Nate in hobbies_creativity). The remaining gap is inherent to filtering: some sessions in room #4 or #5 by keyword score are missed even though they're relevant.
 
-**Per-category (palace v2, top-3 rooms, top-10):**
+**Per-category (Anaktoron v2, top-3 rooms, top-10):**
 
 | Category | R@10 |
 |---|---|
@@ -674,7 +674,7 @@ These are the runs needed to produce defensible, publishable numbers. None of th
 
 **DONE** — see above. 98.4% R@5 on 450 held-out questions.
 
-### 1b. Palace mode LoCoMo (in progress)
+### 1b. Anaktoron mode LoCoMo (in progress)
 
 ```bash
 python benchmarks/longmemeval_bench.py /tmp/longmemeval-data/longmemeval_s_cleaned.json \

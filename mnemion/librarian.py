@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-mnemion/librarian.py — Daily background palace tidy-up.
+mnemion/librarian.py — Daily background Anaktoron tidy-up.
 
 The Librarian runs once a day (typically overnight) and processes drawers
 that were never reviewed by the local LLM — because vLLM was down at save
@@ -137,8 +137,8 @@ def _get_drawer_text(collection, drawer_id: str) -> Optional[str]:
         result = collection.get(ids=[drawer_id], include=["documents"])
         if result["ids"]:
             return result["documents"][0]
-    except Exception:
-        pass
+    except Exception as e:
+                logger.error(f"Suppressed error in execution: {e}")
     return None
 
 
@@ -219,7 +219,8 @@ def run_librarian(
     client = chromadb.PersistentClient(path=palace_path)
     try:
         collection = client.get_collection(cfg.collection_name)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Caught exception: {e}")
         return {"skipped": True, "reason": f"Collection '{cfg.collection_name}' not found"}
 
     state = _load_state()
@@ -227,7 +228,7 @@ def run_librarian(
 
     drawers = _find_unprocessed(kg_path, limit, wing, cursor_ts)
     if not drawers:
-        logger.info("Librarian: nothing to process — palace is tidy.")
+        logger.info("Librarian: nothing to process — Anaktoron is tidy.")
         return {"processed": 0, "note": "nothing to do"}
 
     logger.info(f"Librarian: processing {len(drawers)} drawers (dry_run={dry_run})")
@@ -312,8 +313,8 @@ def run_librarian(
                             source_closet=drawer_id,
                         )
                         stats["kg_triples_added"] += 1
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"Suppressed error in execution: {e}")
 
             # ── Mark as verified (won't be picked up next run) ───────────────
             if not dry_run:

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any, Set
 
 import chromadb
-from .config import MempalaceConfig
+from .config import MnemionConfig
 
 # Statuses excluded from search by default
 _HIDDEN_STATUSES: Set[str] = {"superseded", "historical"}
@@ -158,7 +158,7 @@ class HybridSearcher:
     def __init__(
         self, palace_path: Optional[str] = None, kg_path: Optional[str] = None, k: int = 60
     ):
-        cfg = MempalaceConfig()
+        cfg = MnemionConfig()
         self.palace_path = palace_path or cfg.palace_path
         self.kg_path = kg_path or Path(self.palace_path).parent / "knowledge_graph.sqlite3"
         self.k = k
@@ -172,7 +172,7 @@ class HybridSearcher:
         try:
             self.collection = self.chroma_client.get_collection(self.collection_name)
         except Exception:
-            # Palace not yet initialized — search will return empty results.
+            # Anaktoron not yet initialized — search will return empty results.
             self.collection = None
 
     def _fts_run(
@@ -346,10 +346,12 @@ class HybridSearcher:
 
         # 5. Hydrate from the verbatim document store
         final_ids = [item[0] for item in top_entries]
-        data = self.collection.get(ids=final_ids, include=["documents", "metadatas"])
+        data = self.collection.get(ids=final_ids, include=["documents", "metadatas", "embeddings"])
+        _embs = data.get("embeddings")
+        embeddings = _embs if _embs is not None else [None] * len(data["ids"])
         doc_map = {
-            idx: (doc, meta)
-            for idx, doc, meta in zip(data["ids"], data["documents"], data["metadatas"])
+            idx: (doc, meta, emb)
+            for idx, doc, meta, emb in zip(data["ids"], data["documents"], data["metadatas"], embeddings)
         }
 
         hits = []
@@ -357,7 +359,7 @@ class HybridSearcher:
             if min_similarity > 0.0 and score < min_similarity:
                 continue
             if doc_id in doc_map:
-                doc, meta = doc_map[doc_id]
+                doc, meta, emb = doc_map[doc_id]
                 hit = {
                     "id": doc_id,
                     "text": doc,
@@ -367,6 +369,7 @@ class HybridSearcher:
                     "score": round(score, 6),
                     "trust_status": status,
                     "confidence": round(confidence, 3),
+                    "embedding": emb.tolist() if hasattr(emb, "tolist") else emb,
                 }
                 if status == "contested":
                     hit["warning"] = "⚠ This memory is contested — accuracy uncertain"

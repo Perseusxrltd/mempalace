@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-spellcheck.py — Spell-correct user messages before palace filing.
+spellcheck.py — Spell-correct user messages before Anaktoron filing.
 
 Preserves:
   - Technical terms (words with digits, hyphens, underscores)
@@ -251,7 +251,7 @@ if __name__ == "__main__":
         "isn't there meny diferent benchmarks tesing questions?",
         "also can you pleese spell chekc my questions befroe storing",
         "it's realy hard for me to writte coherently at 3am",
-        "Mempalace cant be fine-tunned if you alredy kno the question",
+        "Mnemion cant be fine-tunned if you alredy kno the question",
         # Should NOT change these:
         "ChromaDB bge-large-en-v1.5 NDCG@10 R@5",
         "Riley picked up Sam from school",
