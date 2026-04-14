@@ -1,5 +1,10 @@
 import sys
-import torch
+import pytest
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
 from pathlib import Path
 
 # Add project root to path
@@ -8,6 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from mnemion.lewm import groom_embeddings
 
 
+@pytest.mark.skipif(not TORCH_AVAILABLE, reason="PyTorch is required for SIGReg Grooming")
 def test_grooming():
     print("--- Testing SIGReg Grooming ---")
 
