@@ -9,9 +9,6 @@ import os
 from pathlib import Path
 
 DEFAULT_ANAKTORON_PATH = os.path.expanduser("~/.mnemion/anaktoron")
-
-# Backward compat alias — old code may reference this constant
-DEFAULT_PALACE_PATH = DEFAULT_ANAKTORON_PATH
 DEFAULT_COLLECTION_NAME = "mnemion_drawers"
 
 # hnsw:space=cosine is required because searcher.py computes
@@ -52,7 +49,7 @@ DEFAULT_HALL_KEYWORDS = {
         "exist",
         "alive",
     ],
-    "memory": ["memory", "remember", "forget", "recall", "archive", "palace", "store"],
+    "memory": ["memory", "remember", "forget", "recall", "archive", "store"],
     "technical": [
         "code",
         "python",
@@ -102,21 +99,21 @@ class MnemionConfig:
     @property
     def anaktoron_path(self):
         """Path to the Anaktoron data directory."""
-        # Check new env var first, then legacy env vars for backward compat
+        # Priority:
+        # 1. Direct env var override (new)
+        # 2. Legacy env var override
+        # 3. Config file (new key)
+        # 4. Config file (legacy key)
+        # 5. Default path (new)
         env_val = os.environ.get("MNEMION_ANAKTORON_PATH") or os.environ.get("MNEMION_PALACE_PATH")
         if env_val:
             return env_val
-        # Accept both new key and legacy key in config.json
-        return self._file_config.get(
-            "anaktoron_path",
-            self._file_config.get("palace_path", DEFAULT_ANAKTORON_PATH),
-        )
 
-    # Backward compat alias so existing code referencing .palace_path still works
-    @property
-    def palace_path(self):
-        """Deprecated alias for anaktoron_path."""
-        return self.anaktoron_path
+        return (
+            self._file_config.get("anaktoron_path")
+            or self._file_config.get("palace_path")
+            or DEFAULT_ANAKTORON_PATH
+        )
 
     @property
     def collection_name(self):

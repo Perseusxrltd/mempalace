@@ -1,5 +1,5 @@
 """
-palace_graph.py — Graph traversal layer for Mnemion
+anaktoron_graph.py — Graph traversal layer for Mnemion
 ======================================================
 
 Builds a navigable graph from the Anaktoron structure:
@@ -24,7 +24,7 @@ import chromadb
 def _get_collection(config=None):
     config = config or MnemionConfig()
     try:
-        client = chromadb.PersistentClient(path=config.palace_path)
+        client = chromadb.PersistentClient(path=config.anaktoron_path)
         return client.get_collection(config.collection_name)
     except Exception as e:
         print(f"Caught exception: {e}")

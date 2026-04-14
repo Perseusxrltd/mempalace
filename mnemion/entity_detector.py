@@ -81,9 +81,9 @@ PROJECT_VERB_PATTERNS = [
     r"\bthe\s+{name}\s+pipeline\b",
     r"\bthe\s+{name}\s+system\b",
     r"\bthe\s+{name}\s+repo\b",
-    r"\b{name}\s+v\d+\b",  # MemPal v2
+    r"\b{name}\s+v\d+\b",  # Mnemion v2
     r"\b{name}\.py\b",  # mnemion.py
-    r"\b{name}-core\b",  # mempal-core (hyphen only, not underscore)
+    r"\b{name}-core\b",  # mnemion-core (hyphen only, not underscore)
     r"\b{name}-local\b",
     r"\bimport\s+{name}\b",
     r"\bpip\s+install\s+{name}\b",

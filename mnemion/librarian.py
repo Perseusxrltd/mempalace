@@ -194,7 +194,7 @@ def run_librarian(
     from .config import MnemionConfig
     from .llm_backend import get_backend, NullBackend, ManagedBackend
     from .hybrid_searcher import HybridSearcher
-    from .drawer_trust import DrawerTrust
+    from .trust_lifecycle import DrawerTrust
     from .knowledge_graph import KnowledgeGraph
     import chromadb
 
@@ -210,13 +210,13 @@ def run_librarian(
         if not backend.ensure_running():
             return {"skipped": True, "reason": "LLM backend failed to start"}
 
-    palace_path = cfg.palace_path
-    kg_path = os.path.join(os.path.dirname(palace_path), "knowledge_graph.sqlite3")
+    anaktoron_path = cfg.anaktoron_path
+    kg_path = os.path.join(os.path.dirname(anaktoron_path), "knowledge_graph.sqlite3")
     trust = DrawerTrust(kg_path)
     kg = KnowledgeGraph(kg_path)
-    hybrid = HybridSearcher(palace_path=palace_path, kg_path=kg_path)
+    hybrid = HybridSearcher(anaktoron_path=anaktoron_path, kg_path=kg_path)
 
-    client = chromadb.PersistentClient(path=palace_path)
+    client = chromadb.PersistentClient(path=anaktoron_path)
     try:
         collection = client.get_collection(cfg.collection_name)
     except Exception as e:

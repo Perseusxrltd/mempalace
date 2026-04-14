@@ -282,7 +282,7 @@ def is_force_included(path: Path, project_path: Path, include_paths: set) -> boo
 
 
 def load_config(project_dir: str) -> dict:
-    """Load mnemion.yaml from project directory (falls back to mempal.yaml)."""
+    """Load mnemion.yaml from project directory (falls back to mnemion.yaml legacy check)."""
     import yaml
 
     config_path = Path(project_dir).expanduser().resolve() / "mnemion.yaml"
@@ -394,14 +394,14 @@ def chunk_text(content: str, source_file: str) -> list:
 # =============================================================================
 
 
-def get_collection(palace_path: str, collection_name: str = None):
+def get_collection(anaktoron_path: str, collection_name: str = None):
     from .chroma_compat import fix_blob_seq_ids
     from .config import MnemionConfig
 
     col_name = collection_name or MnemionConfig().collection_name
-    os.makedirs(palace_path, exist_ok=True)
-    fix_blob_seq_ids(palace_path)
-    client = chromadb.PersistentClient(path=palace_path)
+    os.makedirs(anaktoron_path, exist_ok=True)
+    fix_blob_seq_ids(anaktoron_path)
+    client = chromadb.PersistentClient(path=anaktoron_path)
     try:
         return client.get_collection(col_name)
     except Exception as e:
@@ -656,7 +656,7 @@ def scan_project(
 
 def mine(
     project_dir: str,
-    palace_path: str,
+    anaktoron_path: str,
     wing_override: str = None,
     agent: str = "mnemion",
     limit: int = 0,
@@ -686,7 +686,7 @@ def mine(
     print(f"  Wing:    {wing}")
     print(f"  Rooms:   {', '.join(r['name'] for r in rooms)}")
     print(f"  Files:   {len(files)}")
-    print(f"  Anaktoron:  {palace_path}")
+    print(f"  Anaktoron:  {anaktoron_path}")
     if dry_run:
         print("  DRY RUN — nothing will be filed")
     if not respect_gitignore:
@@ -696,7 +696,7 @@ def mine(
     print(f"{'─' * 55}\n")
 
     if not dry_run:
-        collection = get_collection(palace_path)
+        collection = get_collection(anaktoron_path)
     else:
         collection = None
 
@@ -739,17 +739,17 @@ def mine(
 # =============================================================================
 
 
-def status(palace_path: str):
+def status(anaktoron_path: str):
     """Show what's been filed in the Anaktoron."""
     from .config import MnemionConfig
 
     col_name = MnemionConfig().collection_name
     try:
-        client = chromadb.PersistentClient(path=palace_path)
+        client = chromadb.PersistentClient(path=anaktoron_path)
         col = client.get_collection(col_name)
     except Exception as e:
         logger.error(f"Caught exception: {e}")
-        print(f"\n  No Anaktoron found at {palace_path}")
+        print(f"\n  No Anaktoron found at {anaktoron_path}")
         print("  Run: mnemion init <dir> then mnemion mine <dir>")
         return
 

@@ -11,7 +11,7 @@ import sqlite3
 logger = logging.getLogger("mnemion.chroma_compat")
 
 
-def fix_blob_seq_ids(palace_path: str) -> None:
+def fix_blob_seq_ids(anaktoron_path: str) -> None:
     """Fix ChromaDB 0.6.x → 1.5.x migration bug: BLOB seq_ids → INTEGER.
 
     ChromaDB 0.6.x stored seq_id as big-endian 8-byte BLOBs. ChromaDB 1.5.x
@@ -19,13 +19,13 @@ def fix_blob_seq_ids(palace_path: str) -> None:
     the Rust compactor to crash with "mismatched types; Rust type u64 (as SQL
     type INTEGER) is not compatible with SQL type BLOB".
 
-    Must be called BEFORE chromadb.PersistentClient(path=palace_path) so the
+    Must be called BEFORE chromadb.PersistentClient(path=anaktoron_path) so the
     fix lands before the compactor fires on init.
 
-    Safe to call on a fresh 1.5.x palace — it checks typeof(seq_id) first
+    Safe to call on a fresh 1.5.x Anaktoron — it checks typeof(seq_id) first
     and is a no-op when no BLOBs are found.
     """
-    db_path = os.path.join(palace_path, "chroma.sqlite3")
+    db_path = os.path.join(anaktoron_path, "chroma.sqlite3")
     if not os.path.isfile(db_path):
         return
     try:

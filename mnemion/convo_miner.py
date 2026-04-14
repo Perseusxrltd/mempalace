@@ -17,7 +17,7 @@ from collections import defaultdict
 
 import chromadb
 import sqlite3
-from .drawer_trust import DrawerTrust
+from .trust_lifecycle import DrawerTrust
 from .knowledge_graph import KnowledgeGraph
 
 from .config import DRAWER_HNSW_METADATA
@@ -215,12 +215,12 @@ def detect_convo_room(content: str) -> str:
 # =============================================================================
 
 
-def get_collection(palace_path: str, collection_name: str = None):
+def get_collection(anaktoron_path: str, collection_name: str = None):
     from .config import MnemionConfig
 
     col_name = collection_name or MnemionConfig().collection_name
-    os.makedirs(palace_path, exist_ok=True)
-    client = chromadb.PersistentClient(path=palace_path)
+    os.makedirs(anaktoron_path, exist_ok=True)
+    client = chromadb.PersistentClient(path=anaktoron_path)
     try:
         return client.get_collection(col_name)
     except Exception:
@@ -262,7 +262,7 @@ def scan_convos(convo_dir: str) -> list:
 
 def mine_convos(
     convo_dir: str,
-    palace_path: str,
+    anaktoron_path: str,
     wing: str = None,
     agent: str = "mnemion",
     limit: int = 0,
@@ -290,12 +290,12 @@ def mine_convos(
     print(f"  Wing:    {wing}")
     print(f"  Source:  {convo_path}")
     print(f"  Files:   {len(files)}")
-    print(f"  Palace:  {palace_path}")
+    print(f"  Anaktoron: {anaktoron_path}")
     if dry_run:
         print("  DRY RUN — nothing will be filed")
     print(f"{'-' * 55}\n")
 
-    collection = get_collection(palace_path) if not dry_run else None
+    collection = get_collection(anaktoron_path) if not dry_run else None
 
     total_drawers = 0
     files_skipped = 0
@@ -383,7 +383,7 @@ def mine_convos(
                 )
 
                 # 2. Add to SQLite FTS5 (Lexical Mirror)
-                kg_path = str(Path(palace_path).parent / "knowledge_graph.sqlite3")
+                kg_path = str(Path(anaktoron_path).parent / "knowledge_graph.sqlite3")
                 KnowledgeGraph(kg_path)  # Ensure schema exists
                 conn = sqlite3.connect(kg_path)
                 try:
@@ -426,4 +426,4 @@ if __name__ == "__main__":
         sys.exit(1)
     from .config import MnemionConfig
 
-    mine_convos(sys.argv[1], palace_path=MnemionConfig().anaktoron_path)
+    mine_convos(sys.argv[1], anaktoron_path=MnemionConfig().anaktoron_path)

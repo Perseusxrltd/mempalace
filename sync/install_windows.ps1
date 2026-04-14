@@ -223,7 +223,7 @@ if ($SkipVllm) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 5: Trust backfill (if palace exists)
+# Step 5: Trust backfill (if Anaktoron exists)
 # ---------------------------------------------------------------------------
 Write-Step "Checking for existing Anaktoron"
 

@@ -146,7 +146,7 @@ class TestBoostAtIncreasingScale:
 
         for size in sizes:
             gen = AnaktoronDataGenerator(seed=42, scale=bench_scale)
-            anaktoron_path = str(tmp_path / f"palace_{size}")
+            anaktoron_path = str(tmp_path / f"anaktoron_{size}")
             _, _, needle_info = gen.populate_anaktoron_directly(
                 anaktoron_path, n_drawers=size, include_needles=True
             )

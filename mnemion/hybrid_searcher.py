@@ -157,19 +157,19 @@ class HybridSearcher:
     """
 
     def __init__(
-        self, palace_path: Optional[str] = None, kg_path: Optional[str] = None, k: int = 60
+        self, anaktoron_path: Optional[str] = None, kg_path: Optional[str] = None, k: int = 60
     ):
         cfg = MnemionConfig()
-        self.palace_path = palace_path or cfg.palace_path
-        self.kg_path = kg_path or Path(self.palace_path).parent / "knowledge_graph.sqlite3"
+        self.anaktoron_path = anaktoron_path or cfg.anaktoron_path
+        self.kg_path = kg_path or Path(self.anaktoron_path).parent / "knowledge_graph.sqlite3"
         self.k = k
         self.collection_name = cfg.collection_name
 
         # Persistent clients
         from .chroma_compat import fix_blob_seq_ids
-
-        fix_blob_seq_ids(self.palace_path)
-        self.chroma_client = chromadb.PersistentClient(path=self.palace_path)
+        
+        fix_blob_seq_ids(self.anaktoron_path)
+        self.chroma_client = chromadb.PersistentClient(path=self.anaktoron_path)
         try:
             self.collection = self.chroma_client.get_collection(self.collection_name)
         except Exception:

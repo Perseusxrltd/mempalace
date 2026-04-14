@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-drawer_trust.py — Memory Trust Layer for Mnemion
+trust_lifecycle.py — Memory Trust Layer for Mnemion
 ====================================================
 
 Every drawer (memory) has a lifecycle:
@@ -100,7 +100,7 @@ class DrawerTrust:
         from .config import MnemionConfig
 
         cfg = MnemionConfig()
-        anaktoron_parent = Path(cfg.palace_path).parent
+        anaktoron_parent = Path(cfg.anaktoron_path).parent
         self.db_path = db_path or str(anaktoron_parent / "knowledge_graph.sqlite3")
         self._init_schema()
 

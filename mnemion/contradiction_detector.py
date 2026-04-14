@@ -174,7 +174,7 @@ def _apply_resolution(
         trust.resolve_conflict(conflict_id, "llm_no_conflict", note)
         return
 
-    from .drawer_trust import STATUS_SUPERSEDED, STATUS_CONTESTED
+    from .trust_lifecycle import STATUS_SUPERSEDED, STATUS_CONTESTED
 
     if winner == "b":
         trust.update_status(
@@ -293,7 +293,7 @@ def run_detection_thread(
                         trust, new_drawer_id, candidate["id"], s2, conflict_id, stage=2
                     )
                 else:
-                    from .drawer_trust import STATUS_CONTESTED
+                    from .trust_lifecycle import STATUS_CONTESTED
 
                     trust.update_status(
                         new_drawer_id,

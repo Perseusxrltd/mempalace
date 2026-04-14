@@ -36,10 +36,10 @@ import chromadb  # noqa: E402
 
 from .config import DRAWER_HNSW_METADATA, MnemionConfig  # noqa: E402
 from .version import __version__  # noqa: E402
-from .palace_graph import traverse, find_tunnels, graph_stats  # noqa: E402
+from .anaktoron_graph import traverse, find_tunnels, graph_stats  # noqa: E402
 from .knowledge_graph import KnowledgeGraph  # noqa: E402
 from .hybrid_searcher import HybridSearcher  # noqa: E402
-from .drawer_trust import DrawerTrust  # noqa: E402
+from .trust_lifecycle import DrawerTrust  # noqa: E402
 from . import contradiction_detector as _cd  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
@@ -66,9 +66,9 @@ _config = MnemionConfig()
 
 # Hybrid Searcher and KG initialization with support for custom Anaktoron paths
 if _args.anaktoron:
-    kg_path = os.path.join(os.path.dirname(_config.palace_path), "knowledge_graph.sqlite3")
+    kg_path = os.path.join(os.path.dirname(_config.anaktoron_path), "knowledge_graph.sqlite3")
     _kg = KnowledgeGraph(db_path=kg_path)
-    _hybrid = HybridSearcher(palace_path=_config.palace_path, kg_path=kg_path)
+    _hybrid = HybridSearcher(anaktoron_path=_config.anaktoron_path, kg_path=kg_path)
     _trust = DrawerTrust(db_path=kg_path)
 else:
     _kg = KnowledgeGraph()
@@ -87,8 +87,8 @@ def _get_collection(create=False):
         if _client_cache is None:
             from .chroma_compat import fix_blob_seq_ids
 
-            fix_blob_seq_ids(_config.palace_path)
-            _client_cache = chromadb.PersistentClient(path=_config.palace_path)
+            fix_blob_seq_ids(_config.anaktoron_path)
+            _client_cache = chromadb.PersistentClient(path=_config.anaktoron_path)
         if create:
             # Issue #218: cosine required so similarity = 1 - distance is meaningful.
             _collection_cache = _client_cache.get_or_create_collection(
@@ -149,7 +149,7 @@ def tool_status():
         "total_drawers": count,
         "wings": wings,
         "rooms": rooms,
-        "palace_path": _config.palace_path,
+        "anaktoron_path": _config.anaktoron_path,
         "protocol": ANAKTORON_PROTOCOL,
         "aaak_dialect": AAAK_SPEC,
     }

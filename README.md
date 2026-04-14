@@ -10,7 +10,7 @@
 
 **Mnemion** is a production-grade AI memory system built by **PerseusXR**. Give any AI a persistent, searchable memory Anaktoron — hybrid lexical-semantic retrieval, a human-like trust lifecycle, background contradiction detection, intelligent LLM lifecycle management, and a behavioral protocol so your AI actually knows to use its memory.
 
-Inspired by the original [mempalace](https://github.com/milla-jovovich/mempalace) project. Built far beyond it.
+Inspired by the original mempal project. Built far beyond it.
 
 <br>
 
@@ -415,7 +415,7 @@ The upstream project's **96.6% R@5 on LongMemEval** (raw mode) is real and indep
 
 ## Origins
 
-Mnemion began as a fork of [milla-jovovich/mempalace](https://github.com/milla-jovovich/mempalace), which introduced the memory Anaktoron metaphor and the AAAK dialect. The hybrid retrieval engine, trust lifecycle, contradiction detection, intelligent LLM lifecycle, knowledge graph, and behavioral protocol bootstrap were all built from scratch by PerseusXR. The name changed when what we built stopped resembling where we started.
+Mnemion began as a fork of mempalace, which introduced the memory Anaktoron metaphor and the AAAK dialect. The hybrid retrieval engine, trust lifecycle, contradiction detection, intelligent LLM lifecycle, knowledge graph, and behavioral protocol bootstrap were all built from scratch by PerseusXR. The name changed when what we built stopped resembling where we started.
 
 ---
 
@@ -504,7 +504,7 @@ New `mnemion librarian` command — a cursor-based background agent that tidy-up
 ### v3.2.9 — Project Renamed: mnemion → Mnemion
 
 - Package, CLI command, MCP server name, and all internal references renamed from `mnemion` to `mnemion`
-- Auto-migration: on first startup, existing `~/.mempalace/` config is detected and migrated to `~/.mnemion/` with confirmation prompt
+- Auto-migration: on first startup, existing `.mempalace` config is detected and migrated to `.mnemion` with confirmation prompt
 - `startup_timeout` default raised from 90s → 300s to handle cold GPU start
 - WSL `start_script` now strips CRLF from the script path before execution
 

@@ -5,7 +5,7 @@
 #   .\scripts\setup_librarian_scheduler.ps1
 
 $TaskName  = "MnemionLibrarian"
-$TaskDesc  = "Daily Mnemion memory-palace tidy-up (contradiction scan, room re-classification, KG extraction)"
+$TaskDesc  = "Daily Mnemion Anaktoron tidy-up (contradiction scan, room re-classification, KG extraction)"
 $PythonExe = (Get-Command py -ErrorAction SilentlyContinue)?.Source
 if (-not $PythonExe) { $PythonExe = "py" }   # fallback — must be on PATH
 

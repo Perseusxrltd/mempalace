@@ -85,13 +85,6 @@ def anaktoron_path(tmp_dir):
     return p
 
 
-# Backward compat alias so existing tests using palace_path still pass
-@pytest.fixture
-def palace_path(anaktoron_path):
-    """Alias for anaktoron_path — backward compat."""
-    return anaktoron_path
-
-
 @pytest.fixture
 def config(tmp_dir, anaktoron_path):
     """A MnemionConfig pointing at the temp Anaktoron."""

@@ -28,7 +28,7 @@ class SearchError(Exception):
 
 def search(
     query: str,
-    palace_path: str,
+    anaktoron_path: str,
     wing: str = None,
     room: str = None,
     n_results: int = 5,
@@ -41,12 +41,12 @@ def search(
     """
     col_name = collection_name or MnemionConfig().collection_name
     try:
-        client = chromadb.PersistentClient(path=palace_path)
+        client = chromadb.PersistentClient(path=anaktoron_path)
         col = client.get_collection(col_name)
     except Exception:
-        print(f"\n  No Anaktoron found at {palace_path}")
+        print(f"\n  No Anaktoron found at {anaktoron_path}")
         print("  Run: mnemion init <dir> then mnemion mine <dir>")
-        raise SearchError(f"No Anaktoron found at {palace_path}")
+        raise SearchError(f"No Anaktoron found at {anaktoron_path}")
 
     # Build where filter
     where = {}
@@ -117,7 +117,7 @@ def search(
 
 def search_memories(
     query: str,
-    palace_path: str,
+    anaktoron_path: str,
     wing: str = None,
     room: str = None,
     n_results: int = 5,
@@ -130,10 +130,10 @@ def search_memories(
     """
     col_name = collection_name or MnemionConfig().collection_name
     try:
-        client = chromadb.PersistentClient(path=palace_path)
+        client = chromadb.PersistentClient(path=anaktoron_path)
         col = client.get_collection(col_name)
     except Exception as e:
-        logger.error("No Anaktoron found at %s: %s", palace_path, e)
+        logger.error("No Anaktoron found at %s: %s", anaktoron_path, e)
         return {
             "error": "No Anaktoron found",
             "hint": "Run: mnemion init <dir> && mnemion mine <dir>",

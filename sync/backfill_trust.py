@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.expanduser("~/projects/mnemion"))
 
 import chromadb
 from mnemion.config import MnemionConfig
-from mnemion.drawer_trust import DrawerTrust
+from mnemion.trust_lifecycle import DrawerTrust
 
 config = MnemionConfig()
 client = chromadb.PersistentClient(path=config.anaktoron_path)

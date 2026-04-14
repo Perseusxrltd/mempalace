@@ -157,7 +157,7 @@ try:
     
     import sqlite3, os
     from pathlib import Path
-    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    kg_path = Path(config.anaktoron_path).parent / 'knowledge_graph.sqlite3'
     if kg_path.exists():
         conn = sqlite3.connect(kg_path)
         with open("$KG_EXPORT_FILE", 'w', encoding='utf-8') as f:
@@ -229,7 +229,7 @@ from pathlib import Path
 from mnemion.config import MnemionConfig
 try:
     config = MnemionConfig()
-    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    kg_path = Path(config.anaktoron_path).parent / 'knowledge_graph.sqlite3'
     if kg_path.exists():
         conn = sqlite3.connect(kg_path)
         with open("$KG_REMOTE_FILE", 'r', encoding='utf-8') as f:
@@ -244,7 +244,7 @@ PYEOF2
             rm -f "$KG_REMOTE_FILE"
             
             # Re-dump the now successfully unified graph so it is staged 
-            "$PYTHON" -c "import sqlite3; from mnemion.config import MnemionConfig; from pathlib import Path; p=Path(MnemionConfig().palace_path).parent/'knowledge_graph.sqlite3'; c=sqlite3.connect(p); f=open('$KG_EXPORT_FILE', 'w', encoding='utf-8'); [f.write(l+'\n') for l in c.iterdump()]; c.close()"
+            "$PYTHON" -c "import sqlite3; from mnemion.config import MnemionConfig; from pathlib import Path; p=Path(MnemionConfig().anaktoron_path).parent/'knowledge_graph.sqlite3'; c=sqlite3.connect(p); f=open('$KG_EXPORT_FILE', 'w', encoding='utf-8'); [f.write(l+'\n') for l in c.iterdump()]; c.close()"
         fi
     fi
 

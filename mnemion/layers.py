@@ -81,16 +81,16 @@ class Layer1:
     MAX_DRAWERS = 15  # at most 15 moments in wake-up
     MAX_CHARS = 3200  # hard cap on total L1 text (~800 tokens)
 
-    def __init__(self, palace_path: str = None, wing: str = None):
+    def __init__(self, anaktoron_path: str = None, wing: str = None):
         cfg = MnemionConfig()
-        self.palace_path = palace_path or cfg.palace_path
+        self.anaktoron_path = anaktoron_path or cfg.anaktoron_path
         self.collection_name = cfg.collection_name
         self.wing = wing
 
     def generate(self) -> str:
         """Pull top drawers from ChromaDB and format as compact L1 text."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
+            client = chromadb.PersistentClient(path=self.anaktoron_path)
             col = client.get_collection(self.collection_name)
         except Exception:
             return "## L1 — No Anaktoron found. Run: mnemion mine <dir>"
@@ -188,15 +188,15 @@ class Layer2:
     Queries ChromaDB with a wing/room filter.
     """
 
-    def __init__(self, palace_path: str = None):
+    def __init__(self, anaktoron_path: str = None):
         cfg = MnemionConfig()
-        self.palace_path = palace_path or cfg.palace_path
+        self.anaktoron_path = anaktoron_path or cfg.anaktoron_path
         self.collection_name = cfg.collection_name
 
     def retrieve(self, wing: str = None, room: str = None, n_results: int = 10) -> str:
         """Retrieve drawers filtered by wing and/or room."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
+            client = chromadb.PersistentClient(path=self.anaktoron_path)
             col = client.get_collection(self.collection_name)
         except Exception:
             return "No Anaktoron found."
@@ -253,15 +253,15 @@ class Layer3:
     Reuses searcher.py logic against mnemion_drawers.
     """
 
-    def __init__(self, palace_path: str = None):
+    def __init__(self, anaktoron_path: str = None):
         cfg = MnemionConfig()
-        self.palace_path = palace_path or cfg.palace_path
+        self.anaktoron_path = anaktoron_path or cfg.anaktoron_path
         self.collection_name = cfg.collection_name
 
     def search(self, query: str, wing: str = None, room: str = None, n_results: int = 5) -> str:
         """Semantic search, returns compact result text."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
+            client = chromadb.PersistentClient(path=self.anaktoron_path)
             col = client.get_collection(self.collection_name)
         except Exception:
             return "No Anaktoron found."
@@ -318,7 +318,7 @@ class Layer3:
     ) -> list:
         """Return raw dicts instead of formatted text."""
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
+            client = chromadb.PersistentClient(path=self.anaktoron_path)
             col = client.get_collection(self.collection_name)
         except Exception:
             return []
@@ -382,15 +382,15 @@ class MemoryStack:
         print(stack.search("pricing change"))  # L3 deep search
     """
 
-    def __init__(self, palace_path: str = None, identity_path: str = None):
+    def __init__(self, anaktoron_path: str = None, identity_path: str = None):
         cfg = MnemionConfig()
-        self.palace_path = palace_path or cfg.palace_path
+        self.anaktoron_path = anaktoron_path or cfg.anaktoron_path
         self.identity_path = identity_path or os.path.expanduser("~/.mnemion/identity.txt")
 
         self.l0 = Layer0(self.identity_path)
-        self.l1 = Layer1(self.palace_path)
-        self.l2 = Layer2(self.palace_path)
-        self.l3 = Layer3(self.palace_path)
+        self.l1 = Layer1(self.anaktoron_path)
+        self.l2 = Layer2(self.anaktoron_path)
+        self.l3 = Layer3(self.anaktoron_path)
 
     def wake_up(self, wing: str = None) -> str:
         """
@@ -424,7 +424,7 @@ class MemoryStack:
     def status(self) -> dict:
         """Status of all layers."""
         result = {
-            "palace_path": self.palace_path,
+            "anaktoron_path": self.anaktoron_path,
             "L0_identity": {
                 "path": self.identity_path,
                 "exists": os.path.exists(self.identity_path),
@@ -443,7 +443,7 @@ class MemoryStack:
 
         # Count drawers
         try:
-            client = chromadb.PersistentClient(path=self.palace_path)
+            client = chromadb.PersistentClient(path=self.anaktoron_path)
             col = client.get_collection(MnemionConfig().collection_name)
             count = col.count()
             result["total_drawers"] = count
@@ -486,8 +486,8 @@ if __name__ == "__main__":
         elif not arg.startswith("--"):
             positional.append(arg)
 
-    palace_path = flags.get("palace")
-    stack = MemoryStack(palace_path=palace_path)
+    palace_path = flags.get("anaktoron") or flags.get("palace")
+    stack = MemoryStack(anaktoron_path=palace_path)
 
     if cmd in ("wake-up", "wakeup"):
         wing = flags.get("wing")
