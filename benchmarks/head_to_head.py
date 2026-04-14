@@ -38,7 +38,7 @@ def calculate_stats(z):
 
 def run_benchmark():
     print("=======================================================")
-    print("   HEAD-TO-HEAD BENCHMARK: MEMPALACE vs MNEMION v3.4   ")
+    print("   HEAD-TO-HEAD BENCHMARK: MNEMION BASE vs MNEMION v3.4   ")
     print("=======================================================\n")
 
     # 1. Setup collapsed cluster
@@ -50,7 +50,7 @@ def run_benchmark():
 
     print("--- 1. LATENT HEALTH (Spatial Diversity) ---")
 
-    # Original MemPalace / Mnemion Base (No Grooming)
+    # Mnemion Base (No Grooming)
     sim_base, std_base, kurt_base = calculate_stats(raw_cluster)
     print("[Original/Base]")
     print(f"  Avg Similarity: {sim_base:.6f} (High = Collapsed)")
@@ -90,7 +90,7 @@ def run_benchmark():
     pred_t = torch.tensor(next_state)
     sim_to_target = F.cosine_similarity(pred_t.unsqueeze(0), groomed_z[3].unsqueeze(0)).item()
 
-    print("  Original MemPalace:  [Passive] (No Prediction)")
+    print("  Mnemion Base:        [Passive] (No Prediction)")
     print(f"  Mnemion LeWM v3.4:   [Active]  Next-State Confidence: {sim_to_target:.4f}")
     print("  Status: ACTIVE (v3.4 can anticipate context)")
 

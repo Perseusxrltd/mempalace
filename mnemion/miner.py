@@ -404,9 +404,9 @@ def chunk_text(content: str, source_file: str) -> list:
 
 def get_collection(palace_path: str, collection_name: str = None):
     from .chroma_compat import fix_blob_seq_ids
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
-    col_name = collection_name or MempalaceConfig().collection_name
+    col_name = collection_name or MnemionConfig().collection_name
     os.makedirs(palace_path, exist_ok=True)
     fix_blob_seq_ids(palace_path)
     client = chromadb.PersistentClient(path=palace_path)
@@ -443,9 +443,9 @@ def add_drawer(
     collection, wing: str, room: str, content: str, source_file: str, chunk_index: int, agent: str
 ):
     """Add one drawer to the Anaktoron with optional LeWM Latent Grooming (SIGReg)."""
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
-    cfg = MempalaceConfig()
+    cfg = MnemionConfig()
     lewm_cfg = cfg._file_config.get("lewm", {})
     groom_iterations = lewm_cfg.get("groom_iterations", 0)
     sigreg_weight = lewm_cfg.get("sigreg_weight", 0.1)
@@ -748,9 +748,9 @@ def mine(
 
 def status(palace_path: str):
     """Show what's been filed in the Anaktoron."""
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
-    col_name = MempalaceConfig().collection_name
+    col_name = MnemionConfig().collection_name
     try:
         client = chromadb.PersistentClient(path=palace_path)
         col = client.get_collection(col_name)

@@ -1,9 +1,9 @@
 {
   "name": "mnemion",
-  "version": "3.3.6",
-  "description": "Give your AI a memory — mine projects and conversations into a searchable palace. 19 MCP tools, auto-save hooks, and guided setup.",
+  "version": "3.4.1",
+  "description": "Give your AI a memory — mine projects and conversations into a searchable Anaktoron. 25 MCP tools, auto-save hooks, and guided setup.",
   "author": {
-    "name": "milla-jovovich"
+    "name": "PerseusXR"
   },
   "license": "MIT",
   "commands": [],
@@ -22,7 +22,7 @@
     "rag",
     "mcp",
     "chromadb",
-    "palace",
+    "anaktoron",
     "search"
   ],
   "repository": "https://github.com/Perseusxrltd/mnemion"

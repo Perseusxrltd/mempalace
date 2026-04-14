@@ -13,7 +13,7 @@
 
     Safe to re-run -- all steps are idempotent.
 
-.PARAMETER MempalaceSrc
+.PARAMETER MnemionSrc
     Path to this repo. Auto-detected from script location.
 
 .PARAMETER SkipVllm
@@ -28,7 +28,7 @@
 #>
 
 param(
-    [string]$MempalaceSrc = "",
+    [string]$MnemionSrc = "",
     [switch]$SkipVllm,
     [switch]$SkipHook
 )
@@ -41,7 +41,7 @@ if ([string]::IsNullOrEmpty($SyncDir)) { $SyncDir = $PSScriptRoot }
 $RepoRoot = $SyncDir
 
 # Override if param passed
-if ($MempalaceSrc -ne "") { $RepoRoot = $MempalaceSrc }
+if ($MnemionSrc -ne "") { $RepoRoot = $MnemionSrc }
 
 # Fallback: walk up from script looking for mcp_server.py
 if (-not (Test-Path "$RepoRoot\mnemion\mcp_server.py")) {
@@ -49,7 +49,7 @@ if (-not (Test-Path "$RepoRoot\mnemion\mcp_server.py")) {
     if (Test-Path "$check\mnemion\mcp_server.py") { $RepoRoot = $check }
 }
 
-$MempalDir     = "$env:USERPROFILE\.mnemion"
+$MnemionDir     = "$env:USERPROFILE\.mnemion"
 $ClaudeSettings = "$env:USERPROFILE\.claude\settings.local.json"
 $WslUser       = $env:USERNAME
 
@@ -62,7 +62,7 @@ Write-Host ""
 Write-Host "Mnemion Windows Setup" -ForegroundColor White
 Write-Host "-----------------------" -ForegroundColor White
 Write-Host "Repo:   $RepoRoot"
-Write-Host "Anaktoron: $MempalDir"
+Write-Host "Anaktoron: $MnemionDir"
 Write-Host ""
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ Write-Host ""
 # ---------------------------------------------------------------------------
 Write-Step "Creating ~/.mnemion directory structure"
 
-foreach ($dir in @($MempalDir, "$MempalDir\hooks", "$MempalDir\archive", "$MempalDir\hook_state")) {
+foreach ($dir in @($MnemionDir, "$MnemionDir\hooks", "$MnemionDir\archive", "$MnemionDir\hook_state")) {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         Write-Ok "Created $dir"
@@ -81,7 +81,7 @@ foreach ($dir in @($MempalDir, "$MempalDir\hooks", "$MempalDir\archive", "$Mempa
 
 # Copy SyncMemories.ps1
 $syncSrc = "$RepoRoot\sync\SyncMemories.ps1"
-$syncDst = "$MempalDir\SyncMemories.ps1"
+$syncDst = "$MnemionDir\SyncMemories.ps1"
 if (Test-Path $syncSrc) {
     Copy-Item $syncSrc $syncDst -Force
     Write-Ok "Copied SyncMemories.ps1"
@@ -91,7 +91,7 @@ if (Test-Path $syncSrc) {
 
 # Copy Python save hook
 $hookSrc = "$RepoRoot\hooks\mnemion_save_hook.py"
-$hookDst = "$MempalDir\hooks\mnemion_save_hook.py"
+$hookDst = "$MnemionDir\hooks\mnemion_save_hook.py"
 if (Test-Path $hookSrc) {
     Copy-Item $hookSrc $hookDst -Force
     Write-Ok "Copied mnemion_save_hook.py"
@@ -101,7 +101,7 @@ if (Test-Path $hookSrc) {
 
 # Copy backfill script
 $backfillSrc = "$RepoRoot\sync\backfill_trust.py"
-$backfillDst = "$MempalDir\backfill_trust.py"
+$backfillDst = "$MnemionDir\backfill_trust.py"
 if (Test-Path $backfillSrc) {
     Copy-Item $backfillSrc $backfillDst -Force
     Write-Ok "Copied backfill_trust.py"
@@ -134,7 +134,7 @@ Write-Step "Installing Claude Code auto-save hook"
 if ($SkipHook) {
     Write-Skip "Claude Code hook (-SkipHook passed)"
 } else {
-    $hookCmd = "python3 `"$MempalDir\hooks\mnemion_save_hook.py`""
+    $hookCmd = "python3 `"$MnemionDir\hooks\mnemion_save_hook.py`""
 
     $claudeDir = Split-Path $ClaudeSettings -Parent
     if (-not (Test-Path $claudeDir)) {
@@ -182,7 +182,7 @@ try {
         Write-Ok "Task 'MnemionSync' already registered"
     } else {
         $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-            -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$MempalDir\SyncMemories.ps1`""
+            -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$MnemionDir\SyncMemories.ps1`""
         $trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Hours 1) -Once -At (Get-Date)
         $ts = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
             -StartWhenAvailable -RunOnlyIfNetworkAvailable
@@ -192,7 +192,7 @@ try {
     }
 } catch {
     Write-Warn "Task Scheduler requires Administrator -- re-run: Start-Process powershell -Verb RunAs"
-    Write-Warn "Or manually: Task Scheduler > Create Task > Action: powershell.exe -File `"$MempalDir\SyncMemories.ps1`""
+    Write-Warn "Or manually: Task Scheduler > Create Task > Action: powershell.exe -File `"$MnemionDir\SyncMemories.ps1`""
 }
 
 # ---------------------------------------------------------------------------
@@ -227,9 +227,9 @@ if ($SkipVllm) {
 # ---------------------------------------------------------------------------
 Write-Step "Checking for existing Anaktoron"
 
-$palaceDb = "$MempalDir\palace\chroma.sqlite3"
-if (-not (Test-Path $palaceDb)) {
-    Write-Skip "No Anaktoron at $palaceDb -- backfill skipped (run after mnemion mine)"
+$anaktoronDb = "$MnemionDir\anaktoron\chroma.sqlite3"
+if (-not (Test-Path $anaktoronDb)) {
+    Write-Skip "No Anaktoron at $anaktoronDb -- backfill skipped (run after mnemion mine)"
 } elseif (Test-Path $backfillDst) {
     Write-Host "   Running trust backfill..." -ForegroundColor DarkCyan
     $out = py $backfillDst 2>&1

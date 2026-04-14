@@ -3,7 +3,7 @@
 MemPal × LongMemEval Benchmark
 ================================
 
-Evaluates MemPal's retrieval against the LongMemEval benchmark.
+Evaluates Mnemion's retrieval against the LongMemEval benchmark.
 No modifications to LongMemEval's code required.
 
 For each of the 500 questions:
@@ -41,7 +41,7 @@ from datetime import datetime
 
 import chromadb
 
-# Add mempal to path
+# Add mnemion to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
@@ -156,7 +156,7 @@ def _fresh_collection(name="mnemion_drawers"):
 
 
 # =============================================================================
-# MEMPAL RETRIEVER
+# MNEMION RETRIEVER
 # =============================================================================
 
 
@@ -3032,7 +3032,7 @@ def run_benchmark(
                     pass
 
     print(f"\n{'=' * 60}")
-    print("  MemPal × LongMemEval Benchmark")
+    print("  Mnemion × LongMemEval Benchmark")
     print(f"{'=' * 60}")
     print(f"  Data:        {Path(data_file).name}")
     print(f"  Questions:   {len(data)}")

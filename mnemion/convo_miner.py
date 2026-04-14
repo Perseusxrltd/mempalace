@@ -216,9 +216,9 @@ def detect_convo_room(content: str) -> str:
 
 
 def get_collection(palace_path: str, collection_name: str = None):
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
-    col_name = collection_name or MempalaceConfig().collection_name
+    col_name = collection_name or MnemionConfig().collection_name
     os.makedirs(palace_path, exist_ok=True)
     client = chromadb.PersistentClient(path=palace_path)
     try:
@@ -424,6 +424,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python convo_miner.py <convo_dir> [--anaktoron PATH] [--limit N] [--dry-run]")
         sys.exit(1)
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
-    mine_convos(sys.argv[1], palace_path=MempalaceConfig().palace_path)
+    mine_convos(sys.argv[1], palace_path=MnemionConfig().anaktoron_path)

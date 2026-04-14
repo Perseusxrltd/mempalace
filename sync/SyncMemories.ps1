@@ -24,15 +24,15 @@
 #   MNEMION_SOURCE_DIR  -  path to mnemion package (default: next to this script's parent)
 
 param(
-    [string]$MempalDir    = "",
-    [string]$MempalaceSrc = ""
+    [string]$MnemionDir    = "",
+    [string]$MnemionSrc = ""
 )
 
 # -- Configuration ------------------------------------------------------------
 
 $AgentId   = if ($env:MNEMION_AGENT_ID)  { $env:MNEMION_AGENT_ID }  else { $env:COMPUTERNAME }
-$RepoDir   = if ($env:MNEMION_REPO_DIR)  { $env:MNEMION_REPO_DIR }  elseif ($MempalDir) { $MempalDir } else { "$env:USERPROFILE\.mnemion" }
-$SrcDir    = if ($env:MNEMION_SOURCE_DIR){ $env:MNEMION_SOURCE_DIR } elseif ($MempalaceSrc) { $MempalaceSrc } else {
+$RepoDir   = if ($env:MNEMION_REPO_DIR)  { $env:MNEMION_REPO_DIR }  elseif ($MnemionDir) { $MnemionDir } else { "$env:USERPROFILE\.mnemion" }
+$SrcDir    = if ($env:MNEMION_SOURCE_DIR){ $env:MNEMION_SOURCE_DIR } elseif ($MnemionSrc) { $MnemionSrc } else {
     # Auto-detect: this script lives in ~/.mnemion; the package is in the repo next to projects
     $candidate = Join-Path (Split-Path $PSScriptRoot -Parent) "mnemion"
     if (Test-Path $candidate) { Split-Path $PSScriptRoot -Parent } else { "" }
@@ -144,7 +144,7 @@ try:
     # Active Fix: Dump Knowledge Graph logic synchronously 
     import sqlite3, os
     from pathlib import Path
-    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    kg_path = Path(config.anaktoron_path).parent / 'knowledge_graph.sqlite3'
     if kg_path.exists():
         kg_out = r'$KgExportFile'.replace('\\\\', '/').replace('\\', '/')
         conn = sqlite3.connect(kg_path)
@@ -225,7 +225,7 @@ from mnemion.config import MnemionConfig
 
 try:
     config = MnemionConfig()
-    kg_path = Path(config.palace_path).parent / 'knowledge_graph.sqlite3'
+    kg_path = Path(config.anaktoron_path).parent / 'knowledge_graph.sqlite3'
     if kg_path.exists():
         conn = sqlite3.connect(kg_path)
         with open(r'$KgRemoteFile'.replace('\\\\', '/').replace('\\', '/'), 'r', encoding='utf-8') as f:
@@ -241,7 +241,7 @@ except Exception as e:
             Remove-Item $KgRemoteFile -Force -ErrorAction SilentlyContinue
             
             # Re-dump the now successfully unified graph so it is staged 
-            py -c "import sqlite3; from mnemion.config import MnemionConfig; from pathlib import Path; p=Path(MnemionConfig().palace_path).parent/'knowledge_graph.sqlite3'; c=sqlite3.connect(p); f=open(r'$KgExportFile'.replace('\\\\','/'), 'w', encoding='utf-8'); [f.write(l+'\n') for l in c.iterdump()]; c.close()" 2>&1 | Out-Null
+            py -c "import sqlite3; from mnemion.config import MnemionConfig; from pathlib import Path; p=Path(MnemionConfig().anaktoron_path).parent/'knowledge_graph.sqlite3'; c=sqlite3.connect(p); f=open(r'$KgExportFile'.replace('\\\\','/'), 'w', encoding='utf-8'); [f.write(l+'\n') for l in c.iterdump()]; c.close()" 2>&1 | Out-Null
         }
     }
 

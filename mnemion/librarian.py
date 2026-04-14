@@ -191,14 +191,14 @@ def run_librarian(
     Process up to `limit` unreviewed drawers.
     Returns a summary dict for the diary entry.
     """
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
     from .llm_backend import get_backend, NullBackend, ManagedBackend
     from .hybrid_searcher import HybridSearcher
     from .drawer_trust import DrawerTrust
     from .knowledge_graph import KnowledgeGraph
     import chromadb
 
-    cfg = MempalaceConfig()
+    cfg = MnemionConfig()
     backend = get_backend(cfg)
 
     if isinstance(backend, NullBackend):
@@ -368,11 +368,11 @@ def run_librarian(
 
 def show_status() -> None:
     """Print librarian state and how many drawers are pending."""
-    from .config import MempalaceConfig
+    from .config import MnemionConfig
 
     state = _load_state()
-    cfg = MempalaceConfig()
-    kg_path = os.path.join(os.path.dirname(cfg.palace_path), "knowledge_graph.sqlite3")
+    cfg = MnemionConfig()
+    kg_path = os.path.join(os.path.dirname(cfg.anaktoron_path), "knowledge_graph.sqlite3")
 
     pending = []
     if os.path.exists(kg_path):

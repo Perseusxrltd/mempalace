@@ -5,7 +5,7 @@ import numpy as np
 
 from mnemion.config import MnemionConfig
 PALACE_PATH = MnemionConfig().anaktoron_path
-COLLECTION_NAME = "mempalace_drawers"
+COLLECTION_NAME = "mnemion_drawers"
 
 def run_health_check(wing_name="wing_stress"):
     print(f"--- Mnemion Latent Health Check [{wing_name}] ---")

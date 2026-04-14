@@ -1,9 +1,9 @@
 {
   "name": "mnemion",
-  "version": "3.3.6",
-  "description": "Give your AI a memory — mine projects and conversations into a searchable palace. 19 MCP tools, auto-save hooks, and guided setup.",
+  "version": "3.4.1",
+  "description": "Give your AI a memory — mine projects and conversations into a searchable Anaktoron. 25 MCP tools, auto-save hooks, and guided setup.",
   "author": {
-    "name": "milla-jovovich"
+    "name": "PerseusXR"
   },
   "homepage": "https://github.com/Perseusxrltd/mnemion",
   "repository": "https://github.com/Perseusxrltd/mnemion",
@@ -14,7 +14,7 @@
     "rag",
     "mcp",
     "chromadb",
-    "palace",
+    "anaktoron",
     "search"
   ],
   "skills": "./skills/",
@@ -31,8 +31,8 @@
   "interface": {
     "displayName": "Mnemion",
     "shortDescription": "AI memory system for Codex",
-    "longDescription": "Give your AI a persistent memory — mine projects and conversations into a searchable palace backed by ChromaDB, with 19 MCP tools, auto-save hooks, and guided skills.",
-    "developerName": "milla-jovovich",
+    "longDescription": "Give your AI a persistent memory — mine projects and conversations into a searchable Anaktoron backed by ChromaDB, with 25 MCP tools, auto-save hooks, and guided skills.",
+    "developerName": "PerseusXR",
     "category": "Coding",
     "capabilities": [
       "Interactive",
@@ -44,8 +44,8 @@
     "termsOfServiceURL": "https://github.com/Perseusxrltd/mnemion",
     "defaultPrompt": [
       "Search my memories for recent decisions",
-      "Mine this project into my memory palace",
-      "Show my palace status and room counts"
+      "Mine this project into my memory Anaktoron",
+      "Show my Anaktoron status and room counts"
     ],
     "brandColor": "#7C3AED"
   }

@@ -1,10 +1,10 @@
 import chromadb
 
-PALACE_PATH = r"C:\Users\jorqu\.mempalace\palace"
-COLLECTION_NAME = "mempalace_drawers"
+COLLECTION_NAME = "mnemion_drawers"
 
 def verify_storage():
-    client = chromadb.PersistentClient(path=PALACE_PATH)
+    from mnemion.config import MnemionConfig
+    client = chromadb.PersistentClient(path=MnemionConfig().anaktoron_path)
     col = client.get_collection(COLLECTION_NAME)
 
     # Fetch wing_stress
