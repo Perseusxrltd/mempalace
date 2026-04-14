@@ -549,7 +549,7 @@ Eight upstream bugs fixed, sourced from the milla-jovovich/mnemion community:
 MIT — see [LICENSE](LICENSE).
 
 <!-- Link Definitions -->
-[version-shield]: https://img.shields.io/badge/version-3.3.4-4dc9f6?style=flat-square&labelColor=0a0e14
+[version-shield]: https://img.shields.io/github/v/release/Perseusxrltd/mnemion?style=flat-square&labelColor=0a0e14&color=4dc9f6
 [release-link]: https://github.com/Perseusxrltd/mnemion/releases
 [python-shield]: https://img.shields.io/badge/python-3.9--3.14-7dd8f8?style=flat-square&labelColor=0a0e14&logo=python&logoColor=7dd8f8
 [python-link]: https://www.python.org/

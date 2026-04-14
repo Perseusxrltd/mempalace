@@ -6,6 +6,10 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
+import logging
+
+logger = logging.getLogger("mnemion.lewm")
+
 
 class _SIGReg(torch.nn.Module if TORCH_AVAILABLE else object):
     """
@@ -74,6 +78,10 @@ def groom_embeddings(
     Safe to call without torch installed — returns embeddings unchanged.
     """
     if not TORCH_AVAILABLE:
+        if iterations > 0:
+            logger.warning(
+                "LeWM SIGReg Grooming is enabled in config, but 'torch' is missing. Falling back to unmodified embeddings."
+            )
         return embeddings
     if len(embeddings) < 2:
         return embeddings

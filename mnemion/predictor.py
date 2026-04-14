@@ -78,8 +78,17 @@ def predict_next_context(current_embeddings):
     if len(current_embeddings) < 2:
         return None
 
-    import torch
-    import torch.nn.functional as F
+    try:
+        import torch
+        import torch.nn.functional as F
+    except ImportError:
+        import logging
+
+        logger = logging.getLogger("mnemion.predictor")
+        logger.warning(
+            "JEPA prediction failed: 'torch' is missing. Skipping next context prediction."
+        )
+        return None
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     jepa = _get_jepa_predictor()

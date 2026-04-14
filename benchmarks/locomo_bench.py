@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-MemPal × LoCoMo Benchmark
+Mnemion × LoCoMo Benchmark
 ===========================
 
-Evaluates MemPal's retrieval against the LoCoMo benchmark.
+Evaluates Mnemion's retrieval against the LoCoMo benchmark.
 10 conversations, ~200 QA pairs across 5 categories.
 
 For each conversation:
-1. Ingest all sessions into a fresh MemPal palace
+1. Ingest all sessions into a fresh Mnemion palace
 2. For each QA pair, query the Anaktoron
 3. Score retrieval recall (did we find the evidence dialog?)
 4. Score F1 (optional, if --llm is provided)

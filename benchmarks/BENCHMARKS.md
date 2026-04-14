@@ -308,8 +308,8 @@ The Anaktoron classifies each question into one of 5 halls. Pass 1 searches only
 ### Setup
 
 ```bash
-git clone -b ben/benchmarking https://github.com/aya-thekeeper/mempal.git
-cd mempal
+git clone -b benchmarks https://github.com/Perseusxrltd/mnemion.git
+cd mnemion/benchmarks
 pip install chromadb pyyaml
 mkdir -p /tmp/longmemeval-data
 curl -fsSL -o /tmp/longmemeval-data/longmemeval_s_cleaned.json \

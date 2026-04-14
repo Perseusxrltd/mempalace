@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-MemPal × ConvoMem Benchmark
+Mnemion × ConvoMem Benchmark
 ==============================
 
-Evaluates MemPal's retrieval against the ConvoMem benchmark.
+Evaluates Mnemion's retrieval against the ConvoMem benchmark.
 75,336 QA pairs across 6 evidence categories.
 
 For each evidence item:
-1. Ingest all conversations into a fresh MemPal palace (one drawer per message)
+1. Ingest all conversations into a fresh Mnemion palace (one drawer per message)
 2. Query with the question
 3. Check if any retrieved message matches the evidence messages
 
@@ -234,7 +234,7 @@ def run_benchmark(categories, limit_per_cat, top_k, mode, cache_dir, out_file):
     """Run the ConvoMem retrieval benchmark."""
 
     print(f"\n{'=' * 60}")
-    print("  MemPal × ConvoMem Benchmark")
+    print("  Mnemion × ConvoMem Benchmark")
     print(f"{'=' * 60}")
     print(f"  Categories:  {len(categories)}")
     print(f"  Limit/cat:   {limit_per_cat}")
@@ -283,7 +283,7 @@ def run_benchmark(categories, limit_per_cat, top_k, mode, cache_dir, out_file):
     avg_recall = sum(all_recall) / len(all_recall) if all_recall else 0
 
     print(f"\n{'=' * 60}")
-    print(f"  RESULTS — MemPal ({mode} mode, top-{top_k})")
+    print(f"  RESULTS — Mnemion ({mode} mode, top-{top_k})")
     print(f"{'=' * 60}")
     print(f"  Time:        {elapsed:.1f}s ({elapsed / max(len(items), 1):.2f}s per item)")
     print(f"  Items:       {len(items)}")
@@ -316,7 +316,7 @@ def run_benchmark(categories, limit_per_cat, top_k, mode, cache_dir, out_file):
 # =============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="MemPal × ConvoMem Benchmark")
+    parser = argparse.ArgumentParser(description="Mnemion × ConvoMem Benchmark")
     parser.add_argument("--limit", type=int, default=100, help="Items per category (default: 100)")
     parser.add_argument("--top-k", type=int, default=10, help="Top-k retrieval (default: 10)")
     parser.add_argument(

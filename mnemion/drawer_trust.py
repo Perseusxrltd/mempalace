@@ -97,9 +97,9 @@ class DrawerTrust:
     """
 
     def __init__(self, db_path: Optional[str] = None):
-        from .config import MempalaceConfig
+        from .config import MnemionConfig
 
-        cfg = MempalaceConfig()
+        cfg = MnemionConfig()
         anaktoron_parent = Path(cfg.palace_path).parent
         self.db_path = db_path or str(anaktoron_parent / "knowledge_graph.sqlite3")
         self._init_schema()

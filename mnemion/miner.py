@@ -76,8 +76,6 @@ SKIP_DIRS = {
 SKIP_FILENAMES = {
     "mnemion.yaml",
     "mnemion.yml",
-    "mempal.yaml",
-    "mempal.yml",
     ".gitignore",
     "package-lock.json",
 }
@@ -289,14 +287,9 @@ def load_config(project_dir: str) -> dict:
 
     config_path = Path(project_dir).expanduser().resolve() / "mnemion.yaml"
     if not config_path.exists():
-        # Fallback to legacy name
-        legacy_path = Path(project_dir).expanduser().resolve() / "mempal.yaml"
-        if legacy_path.exists():
-            config_path = legacy_path
-        else:
-            print(f"ERROR: No mnemion.yaml found in {project_dir}")
-            print(f"Run: mnemion init {project_dir}")
-            sys.exit(1)
+        print(f"ERROR: No mnemion.yaml found in {project_dir}")
+        print(f"Run: mnemion init {project_dir}")
+        sys.exit(1)
     with open(config_path) as f:
         return yaml.safe_load(f)
 

@@ -196,8 +196,8 @@ python benchmarks/longmemeval_bench.py data/longmemeval_s_cleaned.json --mode hy
 
 ```bash
 # Setup
-git clone -b ben/benchmarking https://github.com/aya-thekeeper/mempal.git
-cd mempal
+git clone -b benchmarks https://github.com/Perseusxrltd/mnemion.git
+cd mnemion/benchmarks
 pip install chromadb
 
 # Download data

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MemPal × LongMemEval Benchmark
+Mnemion × LongMemEval Benchmark
 ================================
 
 Evaluates Mnemion's retrieval against the LongMemEval benchmark.

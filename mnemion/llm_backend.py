@@ -431,9 +431,9 @@ def get_backend(config=None) -> LLMBackend:
     Returns ManagedBackend when a start_script is present (enables auto-start/stop).
     """
     if config is None:
-        from .config import MempalaceConfig
+        from .config import MnemionConfig
 
-        config = MempalaceConfig()
+        config = MnemionConfig()
 
     llm_cfg = config.llm  # dict: {backend, url, model, api_key, ...}
     backend_name = llm_cfg.get("backend", "none")

@@ -97,30 +97,13 @@ class MnemionConfig:
             except (json.JSONDecodeError, OSError):
                 self._file_config = {}
         elif config_dir is None:
-            # First run after rename from mempalace → mnemion.
-            # Migrate LLM config and anaktoron_path from the old ~/.mempalace/config.json
-            # so existing setups don't silently lose their LLM backend.
-            _legacy = Path(os.path.expanduser("~/.mempalace")) / "config.json"
-            if _legacy.exists():
-                try:
-                    with open(_legacy, "r") as f:
-                        _old = json.load(f)
-                    for key in ("llm", "palace_path", "collection_name", "people_map"):
-                        if key in _old:
-                            self._file_config[key] = _old[key]
-                except (json.JSONDecodeError, OSError):
-                    pass
+            pass
 
     @property
     def anaktoron_path(self):
         """Path to the Anaktoron data directory."""
         # Check new env var first, then legacy env vars for backward compat
-        env_val = (
-            os.environ.get("MNEMION_ANAKTORON_PATH")
-            or os.environ.get("MNEMION_PALACE_PATH")
-            or os.environ.get("MEMPALACE_PALACE_PATH")
-            or os.environ.get("MEMPAL_PALACE_PATH")
-        )
+        env_val = os.environ.get("MNEMION_ANAKTORON_PATH") or os.environ.get("MNEMION_PALACE_PATH")
         if env_val:
             return env_val
         # Accept both new key and legacy key in config.json
@@ -231,7 +214,3 @@ class MnemionConfig:
         with open(self._people_map_file, "w") as f:
             json.dump(people_map, f, indent=2)
         return self._people_map_file
-
-
-# Backward compatibility alias — old code/plugins may import MempalaceConfig
-MempalaceConfig = MnemionConfig

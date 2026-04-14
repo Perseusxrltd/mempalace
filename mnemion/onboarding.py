@@ -355,8 +355,6 @@ def _generate_aaak_bootstrap(
             "## Anaktoron",
             f"Wings: {', '.join(wings)}",
             f"Mode: {mode}",
-            "",
-            "*This file will be enriched by palace_facts.py after mining.*",
         ]
     )
 
