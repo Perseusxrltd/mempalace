@@ -18,7 +18,7 @@ from collections import defaultdict
 import chromadb
 import logging
 import sqlite3
-from .drawer_trust import DrawerTrust
+from .trust_lifecycle import DrawerTrust
 from .knowledge_graph import KnowledgeGraph
 from .config import DRAWER_HNSW_METADATA
 

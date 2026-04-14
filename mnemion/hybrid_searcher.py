@@ -167,7 +167,7 @@ class HybridSearcher:
 
         # Persistent clients
         from .chroma_compat import fix_blob_seq_ids
-        
+
         fix_blob_seq_ids(self.anaktoron_path)
         self.chroma_client = chromadb.PersistentClient(path=self.anaktoron_path)
         try:

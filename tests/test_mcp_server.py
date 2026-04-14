@@ -187,14 +187,18 @@ class TestSearchTool:
         top = result["results"][0]
         assert "JWT" in top["text"] or "authentication" in top["text"].lower()
 
-    def test_search_with_wing_filter(self, monkeypatch, config, anaktoron_path, seeded_collection, kg):
+    def test_search_with_wing_filter(
+        self, monkeypatch, config, anaktoron_path, seeded_collection, kg
+    ):
         _patch_mcp_server(monkeypatch, config, kg)
         from mnemion.mcp_server import tool_search
 
         result = tool_search(query="planning", wing="notes")
         assert all(r["wing"] == "notes" for r in result["results"])
 
-    def test_search_with_room_filter(self, monkeypatch, config, anaktoron_path, seeded_collection, kg):
+    def test_search_with_room_filter(
+        self, monkeypatch, config, anaktoron_path, seeded_collection, kg
+    ):
         _patch_mcp_server(monkeypatch, config, kg)
         from mnemion.mcp_server import tool_search
 
@@ -244,7 +248,9 @@ class TestWriteTools:
         assert result["success"] is True
         assert seeded_collection.count() == 3
 
-    def test_delete_drawer_not_found(self, monkeypatch, config, anaktoron_path, seeded_collection, kg):
+    def test_delete_drawer_not_found(
+        self, monkeypatch, config, anaktoron_path, seeded_collection, kg
+    ):
         _patch_mcp_server(monkeypatch, config, kg)
         from mnemion.mcp_server import tool_delete_drawer
 
