@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './views/Dashboard'
 import GraphView from './views/GraphView'
@@ -8,9 +8,13 @@ import DrawerDetail from './views/DrawerDetail'
 import AgentsView from './views/AgentsView'
 import SettingsView from './views/SettingsView'
 
+// Electron loads the app from file:// — HashRouter required for routing to work.
+// In the browser dev server, BrowserRouter is fine.
+const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
@@ -25,6 +29,6 @@ export default function App() {
           <Route path="/settings" element={<SettingsView />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </Router>
   )
 }

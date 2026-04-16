@@ -5,31 +5,21 @@ import LeftSidebar from './LeftSidebar'
 import StatusBar from './StatusBar'
 import CommandPalette from './CommandPalette'
 
-// ── Selected drawer context (for RightSidebar) ────────────────────────────────
+// ── Layout context ─────────────────────────────────────────────────────────────
 
 interface LayoutCtx {
-  selectedDrawerId: string | undefined
-  setSelectedDrawerId: (id: string | undefined) => void
   openPalette: () => void
 }
 
-export const LayoutContext = createContext<LayoutCtx>({
-  selectedDrawerId: undefined,
-  setSelectedDrawerId: () => {},
-  openPalette: () => {},
-})
-
-export function useLayoutCtx() {
-  return useContext(LayoutContext)
-}
+export const LayoutContext = createContext<LayoutCtx>({ openPalette: () => {} })
+export const useLayoutCtx = () => useContext(LayoutContext)
 
 // ── Layout ─────────────────────────────────────────────────────────────────────
 
 export default function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [selectedDrawerId, setSelectedDrawerId] = useState<string | undefined>(undefined)
 
-  // Global Ctrl+K / Cmd+K
+  // Global Ctrl+K / Cmd+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -42,27 +32,27 @@ export default function Layout() {
   }, [])
 
   return (
-    <LayoutContext.Provider value={{ selectedDrawerId, setSelectedDrawerId, openPalette: () => setPaletteOpen(true) }}>
-      <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background-primary)' }}>
-        {/* Ribbon — leftmost 44px icon strip */}
+    <LayoutContext.Provider value={{ openPalette: () => setPaletteOpen(true) }}>
+      <div
+        className="flex h-screen overflow-hidden"
+        style={{ background: 'var(--background-primary)' }}
+      >
+        {/* Ribbon — 44px leftmost icon strip */}
         <Ribbon onSearch={() => setPaletteOpen(true)} />
 
-        {/* Left sidebar — file explorer */}
+        {/* Left sidebar — Obsidian file explorer */}
         <LeftSidebar />
 
-        {/* Center + optional right panel */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Main content */}
+        {/* Main content column */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <main className="flex-1 overflow-hidden flex flex-col">
             <Outlet />
           </main>
-
-          {/* Status bar */}
           <StatusBar />
         </div>
       </div>
 
-      {/* Command palette overlay */}
+      {/* Command palette — rendered outside main flow */}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </LayoutContext.Provider>
   )

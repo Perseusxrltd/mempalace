@@ -62,31 +62,50 @@ export default function SearchView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Search bar */}
-      <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+      <div
+        className="px-6 pt-5 pb-4 border-b"
+        style={{ borderColor: 'var(--background-modifier-border)', background: 'var(--background-secondary)' }}
+      >
         <div className="flex items-center gap-3 max-w-2xl">
           <div className="flex-1 relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-faint)' }} />
             <input
               autoFocus
               value={q}
               onChange={e => onChange(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && doSearch(q)}
-              placeholder="Search drawers…"
-              className="w-full bg-raised border rounded-lg py-2.5 pl-9 pr-10 text-sm outline-none focus:border-accent transition-colors"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              placeholder="Search across all drawers…"
+              className="w-full rounded-lg py-2.5 pl-9 pr-10 text-sm outline-none transition-colors"
+              style={{
+                background: 'var(--background-modifier-form-field)',
+                border: '1px solid var(--background-modifier-border)',
+                color: 'var(--text-normal)',
+              }}
+              onFocus={e => (e.target.style.borderColor = 'var(--interactive-accent)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--background-modifier-border)')}
             />
             {q && (
-              <button onClick={() => { setQ(''); setResults([]) }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors">
-                <X size={14} />
+              <button
+                onClick={() => { setQ(''); setResults([]) }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                style={{ color: 'var(--text-faint)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-normal)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+              >
+                <X size={13} />
               </button>
             )}
           </div>
           <button
             onClick={() => setShowFilters(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm border transition-colors ${showFilters ? 'border-accent text-accent bg-accent/10' : 'text-muted hover:text-white border-transparent hover:border-border'}`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors"
+            style={{
+              color: showFilters ? 'var(--interactive-accent)' : 'var(--text-muted)',
+              background: showFilters ? 'rgba(127,109,242,0.1)' : 'transparent',
+              border: `1px solid ${showFilters ? 'rgba(127,109,242,0.3)' : 'var(--background-modifier-border)'}`,
+            }}
           >
-            <SlidersHorizontal size={14} /> Filters
+            <SlidersHorizontal size={13} /> Filters
           </button>
         </div>
 
@@ -95,12 +114,25 @@ export default function SearchView() {
             <input
               value={wingFilter}
               onChange={e => setWingFilter(e.target.value)}
-              placeholder="Wing filter (e.g. legal)"
-              className="px-3 py-1.5 rounded-lg text-xs border outline-none focus:border-accent transition-colors"
-              style={{ background: 'var(--raised)', borderColor: 'var(--border)', color: 'var(--text)', width: 200 }}
+              placeholder="Filter by wing (e.g. legal)"
+              className="px-3 py-1.5 rounded-lg text-xs outline-none transition-colors"
+              style={{
+                background: 'var(--background-modifier-form-field)',
+                border: '1px solid var(--background-modifier-border)',
+                color: 'var(--text-normal)',
+                width: 220,
+              }}
+              onFocus={e => (e.target.style.borderColor = 'var(--interactive-accent)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--background-modifier-border)')}
             />
             {wingFilter && (
-              <button onClick={() => setWingFilter('')} className="text-xs text-muted hover:text-white">
+              <button
+                onClick={() => setWingFilter('')}
+                className="text-xs transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-normal)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >
                 Clear
               </button>
             )}
@@ -189,14 +221,6 @@ export default function SearchView() {
         )}
       </div>
 
-      <style>{`
-        mark {
-          background: rgba(124, 106, 247, 0.3);
-          color: #c4b5fd;
-          border-radius: 2px;
-          padding: 0 1px;
-        }
-      `}</style>
     </div>
   )
 }
