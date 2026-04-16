@@ -1099,6 +1099,7 @@ def handle_request(request):
         try:
             tool_args.pop("wait_for_previous", None)
             result = TOOLS[tool_name]["handler"](**tool_args)
+            _write_heartbeat(tool_name)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -1120,8 +1121,40 @@ def handle_request(request):
     }
 
 
+def _write_heartbeat(tool_name: str = ""):
+    """Write / update a heartbeat file for Studio agent status panel."""
+    try:
+        import os as _os
+        hb_dir = _os.path.expanduser("~/.mnemion/heartbeats")
+        _os.makedirs(hb_dir, exist_ok=True)
+        pid = _os.getpid()
+        hb_path = _os.path.join(hb_dir, f"{pid}.json")
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        existing = {}
+        try:
+            with open(hb_path) as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+
+        existing.update({
+            "agent_id": existing.get("agent_id", _os.environ.get("MNEMION_AGENT_ID", f"mcp-{pid}")),
+            "pid": pid,
+            "started_at": existing.get("started_at", now_iso),
+            "last_call": now_iso,
+            "last_tool": tool_name,
+            "call_count": existing.get("call_count", 0) + 1,
+        })
+        with open(hb_path, "w") as f:
+            json.dump(existing, f)
+    except Exception:
+        pass  # heartbeat is best-effort — never break MCP calls
+
+
 def main():
     logger.info("Mnemion MCP Server starting...")
+    _write_heartbeat("startup")
     while True:
         try:
             line = sys.stdin.readline()
