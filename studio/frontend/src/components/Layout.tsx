@@ -79,19 +79,9 @@ export default function Layout() {
       // Don't fire shortcuts when any modal is open
       if (anyModalOpen) return
 
-      // ── '?': keyboard shortcuts ──
-      if (e.key === '?') {
-        setShortcutsOpen(true)
-        return
-      }
-
-      // ── 'C': new drawer ──
-      if (e.key === 'c' || e.key === 'C') {
-        openCreateDrawer()
-        return
-      }
-
       // ── 'G' prefix: navigation sequences ──
+      // Chord dispatch MUST run before single-key shortcuts, otherwise keys
+      // like 'C' (new drawer) would shadow chords like 'G C' (→ /connect).
       if (e.key === 'g' || e.key === 'G') {
         if (gActiveRef.current) {
           // Double-G → graph
@@ -114,6 +104,18 @@ export default function Layout() {
         else if (k === 's') navigate('/search')
         else if (k === 'a') navigate('/agents')
         else if (k === 'c') navigate('/connect')
+        return
+      }
+
+      // ── '?': keyboard shortcuts ──
+      if (e.key === '?') {
+        setShortcutsOpen(true)
+        return
+      }
+
+      // ── 'C': new drawer ──
+      if (e.key === 'c' || e.key === 'C') {
+        openCreateDrawer()
         return
       }
     }
