@@ -23,6 +23,7 @@ from typing import Optional
 _saved_stdout = sys.stdout
 sys.stdout = io.StringIO()
 import chromadb  # noqa: E402
+
 sys.stdout = _saved_stdout
 
 from fastapi import FastAPI, HTTPException, Query  # noqa: E402
@@ -43,9 +44,11 @@ logger = logging.getLogger("studio")
 
 app = FastAPI(title="Mnemion Studio", version=__version__, docs_url="/api/docs")
 
+ALLOWED_CORS_ORIGIN_REGEX = r"^(http://(localhost|127\.0\.0\.1):(517[3-9]|7891)|file://.*|null)$"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(http://(localhost|127\.0\.0\.1)(:\d+)?|file://.*)$",
+    allow_origin_regex=ALLOWED_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,6 +104,7 @@ def _iter_metadatas(col, where=None, limit=None):
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+
 class DrawerCreate(BaseModel):
     wing: str
     room: str
@@ -116,6 +120,7 @@ class LLMConfig(BaseModel):
 
 
 # ── Status & taxonomy ─────────────────────────────────────────────────────────
+
 
 @app.get("/api/status")
 def get_status():
@@ -154,6 +159,7 @@ def get_taxonomy():
 
 # ── Drawers ───────────────────────────────────────────────────────────────────
 
+
 @app.get("/api/drawers")
 def list_drawers(
     wing: Optional[str] = None,
@@ -174,9 +180,7 @@ def list_drawers(
         "offset": offset,
     }
     if where:
-        kwargs["where"] = (
-            where if len(where) == 1 else {"$and": [{k: v} for k, v in where.items()]}
-        )
+        kwargs["where"] = where if len(where) == 1 else {"$and": [{k: v} for k, v in where.items()]}
 
     result = col.get(**kwargs)
     drawers = []
@@ -257,13 +261,16 @@ def delete_drawer(drawer_id: str):
         pass
     trust_rec = _trust.get(drawer_id)
     if trust_rec:
-        _trust.update_status(drawer_id, "historical", reason="deleted via Studio", changed_by="studio")
+        _trust.update_status(
+            drawer_id, "historical", reason="deleted via Studio", changed_by="studio"
+        )
     return {"success": True, "drawer_id": drawer_id}
 
 
 @app.post("/api/drawer")
 def create_drawer(body: DrawerCreate):
     from mnemion.mcp_server import tool_add_drawer
+
     result = tool_add_drawer(
         wing=body.wing,
         room=body.room,
@@ -275,6 +282,7 @@ def create_drawer(body: DrawerCreate):
 
 
 # ── Search ────────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/drawers/recent")
 def get_recent_drawers(limit: int = Query(7, ge=1, le=20)):
@@ -298,14 +306,16 @@ def get_recent_drawers(limit: int = Query(7, ge=1, le=20)):
         result.get("documents") or [],
     ):
         m = meta or {}
-        items.append({
-            "id": did,
-            "wing": m.get("wing", "unknown"),
-            "room": m.get("room", "unknown"),
-            "timestamp": m.get("filed_at") or m.get("timestamp", ""),
-            "added_by": m.get("added_by", ""),
-            "preview": (doc or "")[:120],
-        })
+        items.append(
+            {
+                "id": did,
+                "wing": m.get("wing", "unknown"),
+                "room": m.get("room", "unknown"),
+                "timestamp": m.get("filed_at") or m.get("timestamp", ""),
+                "added_by": m.get("added_by", ""),
+                "preview": (doc or "")[:120],
+            }
+        )
     items.sort(key=lambda x: x["timestamp"] or "", reverse=True)
     return {"drawers": items[:limit]}
 
@@ -337,6 +347,7 @@ def search(
 
 # ── Knowledge graph ───────────────────────────────────────────────────────────
 
+
 @app.get("/api/kg/graph")
 def get_kg_graph(limit_nodes: int = Query(1500, ge=10, le=5000)):
     """All KG entities + triples. Used for the graph view."""
@@ -353,21 +364,20 @@ def get_kg_graph(limit_nodes: int = Query(1500, ge=10, le=5000)):
     finally:
         conn.close()
 
-    nodes = [
-        {"id": e["id"], "label": e["name"], "type": e["type"] or "entity"}
-        for e in entities
-    ]
+    nodes = [{"id": e["id"], "label": e["name"], "type": e["type"] or "entity"} for e in entities]
     edges = []
     for t in triples:
         if t["subject"] in entity_ids and t["object"] in entity_ids:
-            edges.append({
-                "id": t["id"],
-                "source": t["subject"],
-                "target": t["object"],
-                "label": t["predicate"],
-                "valid_from": t["valid_from"],
-                "confidence": t["confidence"],
-            })
+            edges.append(
+                {
+                    "id": t["id"],
+                    "source": t["subject"],
+                    "target": t["object"],
+                    "label": t["predicate"],
+                    "valid_from": t["valid_from"],
+                    "confidence": t["confidence"],
+                }
+            )
 
     return {"nodes": nodes, "edges": edges}
 
@@ -392,6 +402,7 @@ def list_entities(limit: int = Query(200, ge=1, le=2000)):
 
 
 # ── Trust ─────────────────────────────────────────────────────────────────────
+
 
 @app.get("/api/trust/stats")
 def get_trust_stats():
@@ -424,12 +435,15 @@ def challenge_drawer(drawer_id: str, reason: str = ""):
 
 # ── Agents ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/api/agents")
 def get_agents():
     heartbeat_dir = Path(os.path.expanduser("~/.mnemion/heartbeats"))
     beats = []
     if heartbeat_dir.exists():
-        for f in sorted(heartbeat_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        for f in sorted(
+            heartbeat_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        ):
             try:
                 beats.append(json.loads(f.read_text()))
             except Exception:
@@ -458,6 +472,7 @@ def get_agents():
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/api/config")
 def get_config():
     return {
@@ -480,6 +495,7 @@ def update_llm_config(body: LLMConfig):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _trust_summary(rec):
     if not rec:
@@ -507,6 +523,7 @@ def _trust_history(drawer_id: str):
 
 
 # ── Agent connectors ──────────────────────────────────────────────────────────
+
 
 @app.get("/api/connectors")
 def list_connectors():
@@ -550,6 +567,7 @@ def uninstall_connector(conn_id: str):
 
 # ── Vault export (Obsidian-compatible) ───────────────────────────────────────
 
+
 @app.get("/api/export/vault")
 def export_vault(wing: Optional[str] = Query(None)):
     """Export drawers as Obsidian-compatible Markdown files in a streamed ZIP archive."""
@@ -562,9 +580,7 @@ def export_vault(wing: Optional[str] = Query(None)):
 
     # Write to a temp file (not BytesIO) so large vaults don't blow up memory.
     # The temp file is unlinked after the response finishes streaming.
-    tmp = tempfile.NamedTemporaryFile(
-        prefix="mnemion_vault_", suffix=".zip", delete=False
-    )
+    tmp = tempfile.NamedTemporaryFile(prefix="mnemion_vault_", suffix=".zip", delete=False)
     tmp_path = tmp.name
     tmp.close()
 
@@ -600,12 +616,12 @@ def export_vault(wing: Optional[str] = Query(None)):
                         if meta.get(k):
                             fm_lines.append(f'{k}: "{meta[k]}"')
                     if meta.get("confidence") is not None:
-                        fm_lines.append(f'confidence: {meta["confidence"]}')
+                        fm_lines.append(f"confidence: {meta['confidence']}")
                     fm_lines.append("---")
                     fm_lines.append("")
                     fm_lines.append(doc or "")
                     content = "\n".join(fm_lines)
-                    safe_id = re.sub(r'[^\w\-]', '_', did[:32])
+                    safe_id = re.sub(r"[^\w\-]", "_", did[:32])
                     path = f"{w}/{r}/{safe_id}.md"
                     zf.writestr(path, content)
                 if len(ids) < PAGE:
@@ -638,4 +654,5 @@ def export_vault(wing: Optional[str] = Query(None)):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("studio.backend.main:app", host="127.0.0.1", port=7891, reload=True)

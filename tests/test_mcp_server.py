@@ -106,6 +106,32 @@ class TestHandleRequest:
         content = json.loads(resp["result"]["content"][0]["text"])
         assert "total_drawers" in content
 
+    def test_tools_call_ignores_added_by_spoof(self, monkeypatch, config, anaktoron_path, kg):
+        _patch_mcp_server(monkeypatch, config, kg)
+        _client, col = _get_collection(anaktoron_path, create=True)
+        del _client
+        from mnemion.mcp_server import handle_request
+
+        resp = handle_request(
+            {
+                "method": "tools/call",
+                "id": 6,
+                "params": {
+                    "name": "mnemion_add_drawer",
+                    "arguments": {
+                        "wing": "audit",
+                        "room": "mcp",
+                        "content": "External MCP callers cannot spoof audit attribution.",
+                        "added_by": "spoofed-client",
+                    },
+                },
+            }
+        )
+
+        content = json.loads(resp["result"]["content"][0]["text"])
+        metadata = col.get(ids=[content["drawer_id"]], include=["metadatas"])["metadatas"][0]
+        assert metadata["added_by"] == "mcp"
+
 
 # ── Read Tools ──────────────────────────────────────────────────────────
 

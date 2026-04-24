@@ -25,16 +25,17 @@ PYTHON_ARGS = ["-m", "mnemion.mcp_server"]
 
 # ── Registry ──────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Connector:
     id: str
     name: str
     vendor: str
-    category: str         # cli | app | ide
+    category: str  # cli | app | ide
     description: str
-    config_path: str      # can include $APPDATA or ~
+    config_path: str  # can include $APPDATA or ~
     config_paths_os: Optional[dict] = None  # OS-specific override
-    fmt: str = "json"     # json | toml
+    fmt: str = "json"  # json | toml
     mcp_key: str = "mcpServers"
     doc_url: str = ""
     install_note: str = ""
@@ -71,9 +72,9 @@ CONNECTORS: list[Connector] = [
         description="Anthropic's desktop app. Settings → Developer → Edit Config.",
         config_path="",  # resolved per-OS
         config_paths_os={
-            "win32":  "%APPDATA%/Claude/claude_desktop_config.json",
+            "win32": "%APPDATA%/Claude/claude_desktop_config.json",
             "darwin": "~/Library/Application Support/Claude/claude_desktop_config.json",
-            "linux":  "~/.config/Claude/claude_desktop_config.json",
+            "linux": "~/.config/Claude/claude_desktop_config.json",
         },
         mcp_key="mcpServers",
         install_note="Quit Claude Desktop (not just close) after installing.",
@@ -137,6 +138,7 @@ def get(conn_id: str) -> Optional[Connector]:
 
 # ── Path resolution ───────────────────────────────────────────────────────────
 
+
 def resolve_path(c: Connector) -> Path:
     raw = c.config_path
     if c.config_paths_os:
@@ -147,6 +149,7 @@ def resolve_path(c: Connector) -> Path:
 
 
 # ── JSON helpers ──────────────────────────────────────────────────────────────
+
 
 def _read_json(p: Path) -> dict:
     if not p.exists():
@@ -163,6 +166,7 @@ def _write_json(p: Path, data: dict) -> None:
 
 
 # ── TOML helpers (minimal writer for Codex format) ───────────────────────────
+
 
 def _toml_has_block(text: str, block: str) -> bool:
     pattern = rf"^\s*\[{re.escape(block)}\]\s*$"
@@ -191,6 +195,7 @@ def _render_mnemion_toml_block(mcp_key: str) -> str:
 
 # ── Backup ────────────────────────────────────────────────────────────────────
 
+
 def _backup(p: Path) -> Optional[Path]:
     if not p.exists():
         return None
@@ -203,6 +208,7 @@ def _backup(p: Path) -> Optional[Path]:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def detect(c: Connector) -> dict:
     """Return status for a connector without modifying anything."""
@@ -234,8 +240,7 @@ def detect(c: Connector) -> dict:
                 status["mnemion_configured"] = SERVER_NAME in servers
                 status["legacy_detected"] = any(n in servers for n in LEGACY_NAMES)
                 status["other_mcp_servers"] = [
-                    k for k in servers.keys()
-                    if k != SERVER_NAME and k not in LEGACY_NAMES
+                    k for k in servers.keys() if k != SERVER_NAME and k not in LEGACY_NAMES
                 ]
         elif c.fmt == "toml":
             text = p.read_text(encoding="utf-8")
@@ -247,8 +252,7 @@ def detect(c: Connector) -> dict:
             other_pattern = rf"^\s*\[{re.escape(c.mcp_key)}\.([^\]]+)\]"
             names = re.findall(other_pattern, text, re.MULTILINE)
             status["other_mcp_servers"] = [
-                n for n in set(names)
-                if n != SERVER_NAME and n not in LEGACY_NAMES
+                n for n in set(names) if n != SERVER_NAME and n not in LEGACY_NAMES
             ]
     except Exception as exc:
         status["error"] = str(exc)

@@ -4,8 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 # Ensure repo root is on sys.path so `studio.backend.connectors` imports
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -15,6 +13,7 @@ from studio.backend import connectors as C  # noqa: E402
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _connector(tmp_path, *, fmt="json", mcp_key="mcpServers", suffix=".json"):
     return C.Connector(
@@ -31,6 +30,7 @@ def _connector(tmp_path, *, fmt="json", mcp_key="mcpServers", suffix=".json"):
 
 # ── JSON format ───────────────────────────────────────────────────────────────
 
+
 def test_install_json_creates_config(tmp_path):
     c = _connector(tmp_path)
     assert C.install(c)["success"]
@@ -41,9 +41,9 @@ def test_install_json_creates_config(tmp_path):
 
 def test_install_json_preserves_other_servers(tmp_path):
     c = _connector(tmp_path)
-    Path(c.config_path).write_text(json.dumps({
-        "mcpServers": {"other": {"command": "node", "args": ["x"]}}
-    }))
+    Path(c.config_path).write_text(
+        json.dumps({"mcpServers": {"other": {"command": "node", "args": ["x"]}}})
+    )
     assert C.install(c)["success"]
     data = json.loads(Path(c.config_path).read_text())
     assert "mnemion" in data["mcpServers"]
@@ -53,9 +53,11 @@ def test_install_json_preserves_other_servers(tmp_path):
 
 def test_install_json_replaces_legacy_mempalace(tmp_path):
     c = _connector(tmp_path)
-    Path(c.config_path).write_text(json.dumps({
-        "mcpServers": {"mempalace": {"command": "py", "args": ["-m", "mempalace.mcp_server"]}}
-    }))
+    Path(c.config_path).write_text(
+        json.dumps(
+            {"mcpServers": {"mempalace": {"command": "py", "args": ["-m", "mempalace.mcp_server"]}}}
+        )
+    )
     status_before = C.detect(c)
     assert status_before["legacy_detected"]
     assert not status_before["mnemion_configured"]
@@ -97,12 +99,16 @@ def test_install_json_handles_malformed_json(tmp_path):
 
 def test_uninstall_json_removes_only_mnemion(tmp_path):
     c = _connector(tmp_path)
-    Path(c.config_path).write_text(json.dumps({
-        "mcpServers": {
-            "mnemion": {"command": "py"},
-            "other":   {"command": "node"},
-        }
-    }))
+    Path(c.config_path).write_text(
+        json.dumps(
+            {
+                "mcpServers": {
+                    "mnemion": {"command": "py"},
+                    "other": {"command": "node"},
+                }
+            }
+        )
+    )
     assert C.uninstall(c)["success"]
     data = json.loads(Path(c.config_path).read_text())
     assert "mnemion" not in data["mcpServers"]
@@ -111,9 +117,7 @@ def test_uninstall_json_removes_only_mnemion(tmp_path):
 
 def test_uninstall_drops_empty_mcp_key(tmp_path):
     c = _connector(tmp_path)
-    Path(c.config_path).write_text(json.dumps({
-        "mcpServers": {"mnemion": {"command": "py"}}
-    }))
+    Path(c.config_path).write_text(json.dumps({"mcpServers": {"mnemion": {"command": "py"}}}))
     C.uninstall(c)
     data = json.loads(Path(c.config_path).read_text())
     assert "mcpServers" not in data
@@ -121,9 +125,9 @@ def test_uninstall_drops_empty_mcp_key(tmp_path):
 
 def test_detect_reports_other_servers(tmp_path):
     c = _connector(tmp_path)
-    Path(c.config_path).write_text(json.dumps({
-        "mcpServers": {"other": {"command": "x"}, "another": {"command": "y"}}
-    }))
+    Path(c.config_path).write_text(
+        json.dumps({"mcpServers": {"other": {"command": "x"}, "another": {"command": "y"}}})
+    )
     status = C.detect(c)
     assert not status["mnemion_configured"]
     assert sorted(status["other_mcp_servers"]) == ["another", "other"]
@@ -145,6 +149,7 @@ def test_detect_flags_non_dict_mcp_servers(tmp_path):
 
 # ── TOML format (Codex) ──────────────────────────────────────────────────────
 
+
 def test_install_toml_adds_block(tmp_path):
     c = _connector(tmp_path, fmt="toml", mcp_key="mcp_servers", suffix=".toml")
     assert C.install(c)["success"]
@@ -157,7 +162,7 @@ def test_install_toml_replaces_legacy_mempalace(tmp_path):
     c = _connector(tmp_path, fmt="toml", mcp_key="mcp_servers", suffix=".toml")
     Path(c.config_path).write_text(
         '[other]\nkey = "value"\n\n'
-        '[mcp_servers.mempalace]\n'
+        "[mcp_servers.mempalace]\n"
         'command = "py"\n'
         'args = ["-m", "mempalace.mcp_server"]\n'
     )
@@ -194,21 +199,39 @@ def test_uninstall_toml_removes_mnemion(tmp_path):
 
 # ── Snippet ──────────────────────────────────────────────────────────────────
 
+
 def test_snippet_json_is_valid_json():
-    c = C.Connector(id="x", name="x", vendor="x", category="cli", description="",
-                    config_path="x", fmt="json", mcp_key="mcpServers")
+    c = C.Connector(
+        id="x",
+        name="x",
+        vendor="x",
+        category="cli",
+        description="",
+        config_path="x",
+        fmt="json",
+        mcp_key="mcpServers",
+    )
     data = json.loads(C.snippet(c))
     assert "mcpServers" in data
     assert "mnemion" in data["mcpServers"]
 
 
 def test_snippet_toml_contains_block_header():
-    c = C.Connector(id="x", name="x", vendor="x", category="cli", description="",
-                    config_path="x", fmt="toml", mcp_key="mcp_servers")
+    c = C.Connector(
+        id="x",
+        name="x",
+        vendor="x",
+        category="cli",
+        description="",
+        config_path="x",
+        fmt="toml",
+        mcp_key="mcp_servers",
+    )
     assert "[mcp_servers.mnemion]" in C.snippet(c)
 
 
 # ── Unknown format ───────────────────────────────────────────────────────────
+
 
 def test_install_unknown_format_fails_gracefully(tmp_path):
     c = _connector(tmp_path, fmt="yaml", mcp_key="servers")
@@ -218,6 +241,7 @@ def test_install_unknown_format_fails_gracefully(tmp_path):
 
 
 # ── Registry sanity ──────────────────────────────────────────────────────────
+
 
 def test_registry_has_known_clients():
     ids = [c.id for c in C.CONNECTORS]

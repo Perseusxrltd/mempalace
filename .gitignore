@@ -1,4 +1,6 @@
 *.egg-info/
+node_modules/
+.venv/
 dist/
 build/
 __pycache__/
@@ -15,5 +17,6 @@ mnemion/palace/
 *.sqlite3-wal
 
 # CI artifacts — never commit
+.coverage
 jobs.json
 failed_logs.txt

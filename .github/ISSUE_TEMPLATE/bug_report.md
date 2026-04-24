@@ -17,4 +17,4 @@ labels: bug
 **Environment:**
 - OS:
 - Python version:
-- MemPal version: (check `python mempal.py --version` or git SHA)
+- Mnemion version: (check `mnemion --version` or git SHA)

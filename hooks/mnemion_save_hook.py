@@ -28,6 +28,7 @@ def _discover_mnemion_src():
         return env
     try:
         import mnemion  # noqa: F401 — just to resolve __file__
+
         return os.path.dirname(os.path.dirname(os.path.abspath(mnemion.__file__)))
     except Exception:
         return os.path.expanduser("~/projects/mnemion")
