@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('mnemion', {
   version:      () => ipcRenderer.invoke('app:version'),
   platform:     () => ipcRenderer.invoke('app:platform'),
   backendPort:  () => ipcRenderer.invoke('backend:port'),
+  studioToken:  () => ipcRenderer.invoke('backend:token'),
 })

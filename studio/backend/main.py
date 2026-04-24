@@ -16,6 +16,7 @@ import logging
 import os
 import sqlite3
 import sys
+from secrets import compare_digest
 from pathlib import Path
 from typing import Optional
 
@@ -26,8 +27,9 @@ import chromadb  # noqa: E402
 
 sys.stdout = _saved_stdout
 
-from fastapi import FastAPI, HTTPException, Query  # noqa: E402
+from fastapi import FastAPI, HTTPException, Query, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from mnemion.config import DRAWER_HNSW_METADATA, MnemionConfig  # noqa: E402
@@ -45,6 +47,8 @@ logger = logging.getLogger("studio")
 app = FastAPI(title="Mnemion Studio", version=__version__, docs_url="/api/docs")
 
 ALLOWED_CORS_ORIGIN_REGEX = r"^(http://(localhost|127\.0\.0\.1):(517[3-9]|7891)|file://.*|null)$"
+STUDIO_TOKEN_HEADER = "x-mnemion-studio-token"
+MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +57,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_studio_token_for_mutations(request: Request, call_next):
+    expected_token = os.environ.get("MNEMION_STUDIO_TOKEN", "")
+    if (
+        expected_token
+        and request.url.path.startswith("/api/")
+        and request.method in MUTATING_METHODS
+    ):
+        supplied_token = request.headers.get(STUDIO_TOKEN_HEADER, "")
+        if not compare_digest(supplied_token, expected_token):
+            return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+    return await call_next(request)
+
 
 # ── Mnemion singletons ────────────────────────────────────────────────────────
 

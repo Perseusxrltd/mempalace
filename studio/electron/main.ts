@@ -3,12 +3,14 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { spawn, ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
+import { randomBytes } from 'crypto'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const isDev = !app.isPackaged
 const BACKEND_PORT = 7891
+const STUDIO_TOKEN = process.env.MNEMION_STUDIO_TOKEN || randomBytes(32).toString('hex')
 
 let backendProcess: ChildProcess | null = null
 let mainWindow: BrowserWindow | null = null
@@ -34,6 +36,7 @@ function startBackend() {
     env: {
       ...process.env,
       MNEMION_STUDIO_PORT: String(BACKEND_PORT),
+      MNEMION_STUDIO_TOKEN: STUDIO_TOKEN,
     },
     detached: false,
   })
@@ -145,6 +148,7 @@ async function createWindow() {
 ipcMain.handle('app:version', () => app.getVersion())
 ipcMain.handle('app:platform', () => process.platform)
 ipcMain.handle('backend:port', () => BACKEND_PORT)
+ipcMain.handle('backend:token', () => STUDIO_TOKEN)
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 

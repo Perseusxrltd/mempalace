@@ -1,8 +1,33 @@
 import type { AgentsResponse, ConnectorStatus, DrawerDetail, DrawerSummary, KGGraph, RecentDrawer, SearchHit, Status, StudioConfig, Taxonomy, TrustStats } from '../types'
 
+declare global {
+  interface Window {
+    mnemion?: {
+      version?: () => Promise<string>
+      platform?: () => Promise<string>
+      backendPort?: () => Promise<number>
+      studioToken?: () => Promise<string | null>
+    }
+  }
+}
+
 // In Electron (file:// origin) the backend runs on localhost:7891
 const ELECTRON_ORIGIN = 'http://127.0.0.1:7891'
 const isElectron = typeof window !== 'undefined' && window.location.protocol === 'file:'
+let cachedStudioToken: string | null | undefined
+
+async function studioTokenHeader(): Promise<Record<string, string>> {
+  if (cachedStudioToken === undefined) {
+    cachedStudioToken = null
+    try {
+      cachedStudioToken = (await window.mnemion?.studioToken?.()) || null
+    } catch {
+      cachedStudioToken = null
+    }
+  }
+  return cachedStudioToken ? { 'X-Mnemion-Studio-Token': cachedStudioToken } : {}
+}
+
 async function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
   const base = isElectron ? `${ELECTRON_ORIGIN}/api${path}` : `/api${path}`
   const url = new URL(base, isElectron ? undefined : window.location.origin)
@@ -21,14 +46,17 @@ function apiUrl(path: string): string {
 }
 
 async function del(path: string): Promise<void> {
-  const res = await fetch(apiUrl(path), { method: 'DELETE' })
+  const res = await fetch(apiUrl(path), {
+    method: 'DELETE',
+    headers: await studioTokenHeader(),
+  })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await studioTokenHeader()) },
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -38,7 +66,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 async function put<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await studioTokenHeader()) },
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
