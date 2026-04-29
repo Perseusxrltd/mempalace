@@ -90,3 +90,30 @@ def test_cors_preflight_does_not_require_token(monkeypatch):
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_status_exposes_vector_disabled_health(monkeypatch):
+    from studio.backend import main
+
+    monkeypatch.setattr(main, "_vector_disabled", True)
+    monkeypatch.setattr(
+        main,
+        "_health",
+        {
+            "status": "diverged",
+            "sqlite_count": 2501,
+            "hnsw_count": 1,
+            "divergence": 2500,
+            "diverged": True,
+            "message": "repair needed",
+        },
+    )
+    client = TestClient(app)
+
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["vector_disabled"] is True
+    assert payload["health"]["status"] == "diverged"
+    assert payload["repair_command"] == "mnemion repair --mode rebuild"

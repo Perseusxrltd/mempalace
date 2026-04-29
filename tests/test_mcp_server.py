@@ -33,11 +33,14 @@ def _get_collection(anaktoron_path, create=False):
     Returns (client, collection) so callers can clean up the client
     when they are done.
     """
-    import chromadb
+    from mnemion.chroma_compat import make_persistent_client
+    from mnemion.config import DRAWER_HNSW_METADATA
 
-    client = chromadb.PersistentClient(path=anaktoron_path)
+    client = make_persistent_client(anaktoron_path)
     if create:
-        return client, client.get_or_create_collection("mnemion_drawers")
+        return client, client.get_or_create_collection(
+            "mnemion_drawers", metadata=DRAWER_HNSW_METADATA
+        )
     return client, client.get_collection("mnemion_drawers")
 
 
@@ -68,6 +71,10 @@ class TestHandleRequest:
         assert "mnemion_search" in names
         assert "mnemion_add_drawer" in names
         assert "mnemion_kg_add" in names
+        assert "mnemion_get_drawer" in names
+        assert "mnemion_update_drawer" in names
+        assert "mnemion_create_tunnel" in names
+        assert "mnemion_reconnect" in names
 
     def test_unknown_tool(self):
         from mnemion.mcp_server import handle_request
@@ -282,6 +289,68 @@ class TestWriteTools:
 
         result = tool_delete_drawer("nonexistent_drawer")
         assert result["success"] is False
+
+    def test_get_list_and_update_drawer(self, monkeypatch, config, anaktoron_path, kg):
+        _patch_mcp_server(monkeypatch, config, kg)
+        _client, _col = _get_collection(anaktoron_path, create=True)
+        del _client
+        from mnemion.mcp_server import (
+            tool_add_drawer,
+            tool_get_drawer,
+            tool_list_drawers,
+            tool_update_drawer,
+        )
+
+        added = tool_add_drawer("ops", "repair", "Initial repair note.")
+        moved = tool_update_drawer(added["drawer_id"], wing="ops", room="status")
+        assert moved["success"] is True
+        fetched = tool_get_drawer(added["drawer_id"])
+        assert fetched["metadata"]["room"] == "status"
+        listed = tool_list_drawers(wing="ops", room="status")
+        assert [d["drawer_id"] for d in listed["drawers"]] == [added["drawer_id"]]
+
+        superseded = tool_update_drawer(added["drawer_id"], content="Replacement repair note.")
+        assert superseded["success"] is True
+        assert superseded["superseded"] == added["drawer_id"]
+        old = fetched["trust"] or {}
+        updated_old = tool_get_drawer(added["drawer_id"])["trust"]
+        assert (old == {}) or updated_old["status"] == "superseded"
+
+    def test_tunnel_tools(self, monkeypatch, config, anaktoron_path, kg):
+        _patch_mcp_server(monkeypatch, config, kg)
+        from mnemion.mcp_server import (
+            tool_create_tunnel,
+            tool_delete_tunnel,
+            tool_follow_tunnels,
+            tool_list_tunnels,
+        )
+
+        created = tool_create_tunnel("wing_a", "room_a", "wing_b", "room_b", label="related")
+        tunnel_id = created["tunnel"]["tunnel_id"]
+        assert tool_list_tunnels("wing_a")["tunnels"][0]["tunnel_id"] == tunnel_id
+        assert tool_follow_tunnels("wing_a", "room_a")["tunnels"][0]["direction"] == "outbound"
+        assert tool_delete_tunnel(tunnel_id)["success"] is True
+
+    def test_vector_disabled_duplicate_reports_limitation(self, monkeypatch, config, kg):
+        _patch_mcp_server(monkeypatch, config, kg)
+        from mnemion import mcp_server
+
+        monkeypatch.setattr(mcp_server, "_vector_disabled", True)
+        monkeypatch.setattr(mcp_server, "_vector_health", {"status": "diverged"})
+        result = mcp_server.tool_check_duplicate("same memory")
+        assert result["is_duplicate"] is None
+        assert "disabled" in result["warning"].lower()
+
+    def test_reconnect_clears_caches(self, monkeypatch, config, kg):
+        _patch_mcp_server(monkeypatch, config, kg)
+        from mnemion import mcp_server
+
+        monkeypatch.setattr(mcp_server, "_client_cache", object())
+        monkeypatch.setattr(mcp_server, "_collection_cache", object())
+        result = mcp_server.tool_reconnect()
+        assert result["success"] is True
+        assert mcp_server._client_cache is None
+        assert mcp_server._collection_cache is None
 
     def test_check_duplicate(self, monkeypatch, config, anaktoron_path, seeded_collection, kg):
         _patch_mcp_server(monkeypatch, config, kg)

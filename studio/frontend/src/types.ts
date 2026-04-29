@@ -7,6 +7,19 @@ export interface Status {
   rooms: Record<string, number>
   anaktoron_path: string
   collection_name: string
+  health?: AnaktoronHealth
+  vector_disabled?: boolean
+  repair_command?: string
+}
+
+export interface AnaktoronHealth {
+  segment_id: string | null
+  sqlite_count: number | null
+  hnsw_count: number | null
+  divergence: number | null
+  diverged: boolean
+  status: 'ok' | 'diverged' | 'unknown' | string
+  message: string
 }
 
 export interface TrustSummary {

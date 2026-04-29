@@ -78,6 +78,8 @@ async function put<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   status: (): Promise<Status> => get('/status'),
 
+  repairStatus: (): Promise<unknown> => get('/repair/status'),
+
   taxonomy: (): Promise<Taxonomy> => get('/taxonomy'),
 
   drawers: (params: {

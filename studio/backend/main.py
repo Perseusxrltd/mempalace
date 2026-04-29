@@ -32,6 +32,11 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+from mnemion.chroma_compat import (  # noqa: E402
+    hnsw_capacity_status,
+    make_persistent_client,
+    pin_hnsw_threads,
+)
 from mnemion.config import DRAWER_HNSW_METADATA, MnemionConfig  # noqa: E402
 from mnemion.hybrid_searcher import HybridSearcher  # noqa: E402
 from mnemion.knowledge_graph import KnowledgeGraph  # noqa: E402
@@ -76,8 +81,13 @@ async def require_studio_token_for_mutations(request: Request, call_next):
 # ── Mnemion singletons ────────────────────────────────────────────────────────
 
 _config = MnemionConfig()
+_health = hnsw_capacity_status(_config.anaktoron_path, _config.collection_name)
+_vector_disabled = bool(_health.get("diverged"))
 _kg = KnowledgeGraph()
-_hybrid = HybridSearcher()
+_hybrid = HybridSearcher(
+    vector_disabled=_vector_disabled,
+    vector_disabled_reason=_health.get("message", ""),
+)
 _trust = DrawerTrust()
 
 _chroma_client: Optional[chromadb.PersistentClient] = None
@@ -86,8 +96,17 @@ _collection: Optional[chromadb.Collection] = None
 
 def _get_collection() -> chromadb.Collection:
     global _chroma_client, _collection
+    if _vector_disabled:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "Vector index disabled",
+                "health": _health,
+                "repair_command": "mnemion repair --mode rebuild",
+            },
+        )
     if _chroma_client is None:
-        _chroma_client = chromadb.PersistentClient(path=_config.anaktoron_path)
+        _chroma_client = make_persistent_client(_config.anaktoron_path)
     if _collection is None:
         try:
             _collection = _chroma_client.get_collection(_config.collection_name)
@@ -95,6 +114,7 @@ def _get_collection() -> chromadb.Collection:
             _collection = _chroma_client.get_or_create_collection(
                 _config.collection_name, metadata=DRAWER_HNSW_METADATA
             )
+        pin_hnsw_threads(_collection)
     return _collection
 
 
@@ -143,6 +163,20 @@ class LLMConfig(BaseModel):
 
 @app.get("/api/status")
 def get_status():
+    if _vector_disabled:
+        return {
+            "version": __version__,
+            "total_drawers": _health.get("sqlite_count") or 0,
+            "wing_count": 0,
+            "room_count": 0,
+            "wings": {},
+            "rooms": {},
+            "anaktoron_path": _config.anaktoron_path,
+            "collection_name": _config.collection_name,
+            "health": _health,
+            "vector_disabled": True,
+            "repair_command": "mnemion repair --mode rebuild",
+        }
     col = _get_collection()
     wings: dict = {}
     rooms: dict = {}
@@ -160,7 +194,17 @@ def get_status():
         "rooms": rooms,
         "anaktoron_path": _config.anaktoron_path,
         "collection_name": _config.collection_name,
+        "health": _health,
+        "vector_disabled": False,
+        "repair_command": "mnemion repair --mode status",
     }
+
+
+@app.get("/api/repair/status")
+def get_repair_status():
+    from mnemion.repair import status
+
+    return status(_config.anaktoron_path, _config.collection_name)
 
 
 @app.get("/api/taxonomy")

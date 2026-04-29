@@ -16,8 +16,11 @@ No API key. No internet. Everything local.
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Optional
+
+MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024
 
 
 def normalize(filepath: str) -> str:
@@ -26,6 +29,8 @@ def normalize(filepath: str) -> str:
     Plain text files pass through unchanged.
     """
     try:
+        if os.path.getsize(filepath) > MAX_FILE_SIZE_BYTES:
+            raise ValueError(f"{filepath} is too large to normalize safely (>500 MB)")
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     except OSError as e:
@@ -52,6 +57,10 @@ def normalize(filepath: str) -> str:
 def _try_normalize_json(content: str) -> Optional[str]:
     """Try all known JSON chat schemas."""
 
+    normalized = _try_gemini_jsonl(content)
+    if normalized:
+        return normalized
+
     normalized = _try_claude_code_jsonl(content)
     if normalized:
         return normalized
@@ -73,6 +82,36 @@ def _try_normalize_json(content: str) -> Optional[str]:
     return None
 
 
+def _try_gemini_jsonl(content: str) -> Optional[str]:
+    """Gemini CLI JSONL sessions with a session_metadata sentinel."""
+    lines = [line.strip() for line in content.strip().split("\n") if line.strip()]
+    messages = []
+    seen_metadata = False
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        entry_type = entry.get("type", "")
+        if entry_type == "session_metadata":
+            seen_metadata = True
+            continue
+        if not seen_metadata or entry_type == "message_update":
+            continue
+        if entry_type not in {"user", "gemini"}:
+            continue
+        text = _extract_content(entry.get("message", {}).get("content", entry.get("content", "")))
+        if not text:
+            continue
+        role = "user" if entry_type == "user" else "assistant"
+        messages.append((role, text))
+    if seen_metadata and len(messages) >= 2:
+        return _messages_to_transcript(messages)
+    return None
+
+
 def _try_claude_code_jsonl(content: str) -> Optional[str]:
     """Claude Code JSONL sessions."""
     lines = [line.strip() for line in content.strip().split("\n") if line.strip()]
@@ -87,11 +126,15 @@ def _try_claude_code_jsonl(content: str) -> Optional[str]:
         msg_type = entry.get("type", "")
         message = entry.get("message", {})
         if msg_type in ("human", "user"):
-            text = _extract_content(message.get("content", ""))
+            text = _extract_claude_code_content(message.get("content", ""))
             if text:
-                messages.append(("user", text))
+                if text.startswith("Tool result:") and messages and messages[-1][0] == "assistant":
+                    prev_role, prev_text = messages[-1]
+                    messages[-1] = (prev_role, prev_text.rstrip() + "\n\n" + text)
+                else:
+                    messages.append(("user", text))
         elif msg_type == "assistant":
-            text = _extract_content(message.get("content", ""))
+            text = _extract_claude_code_content(message.get("content", ""))
             if text:
                 messages.append(("assistant", text))
     if len(messages) >= 2:
@@ -245,7 +288,7 @@ def _try_slack_json(data) -> Optional[str]:
     for item in data:
         if not isinstance(item, dict) or item.get("type") != "message":
             continue
-        user_id = item.get("user", item.get("username", ""))
+        user_id = _sanitize_speaker_id(item.get("user", item.get("username", "")))
         text = item.get("text", "").strip()
         if not text or not user_id:
             continue
@@ -258,9 +301,12 @@ def _try_slack_json(data) -> Optional[str]:
             else:
                 seen_users[user_id] = "user"
         last_role = seen_users[user_id]
-        messages.append((seen_users[user_id], text))
+        messages.append((seen_users[user_id], f"[{user_id}] {text}"))
     if len(messages) >= 2:
-        return _messages_to_transcript(messages)
+        return (
+            _messages_to_transcript(messages)
+            + "\nSlack provenance: user/assistant roles are positional; original speaker IDs are preserved in brackets.\n"
+        )
     return None
 
 
@@ -273,12 +319,88 @@ def _extract_content(content) -> str:
         for item in content:
             if isinstance(item, str):
                 parts.append(item)
-            elif isinstance(item, dict) and item.get("type") == "text":
+            elif isinstance(item, dict) and (item.get("type") == "text" or "text" in item):
                 parts.append(item.get("text", ""))
         return " ".join(parts).strip()
     if isinstance(content, dict):
         return content.get("text", "").strip()
     return ""
+
+
+def _extract_claude_code_content(content) -> str:
+    if isinstance(content, str):
+        return _strip_noise(content)
+    if not isinstance(content, list):
+        return _extract_content(content)
+    parts = []
+    for item in content:
+        if isinstance(item, str):
+            parts.append(_strip_noise(item))
+        elif isinstance(item, dict):
+            kind = item.get("type")
+            if kind == "text":
+                parts.append(_strip_noise(item.get("text", "")))
+            elif kind == "tool_use":
+                parts.append(_format_tool_use(item))
+            elif kind == "tool_result":
+                formatted = _format_tool_result(item)
+                if formatted:
+                    parts.append(formatted)
+    return "\n".join(p for p in parts if p).strip()
+
+
+def _format_tool_use(item: dict) -> str:
+    name = item.get("name") or item.get("tool_name") or "tool"
+    data = item.get("input") or {}
+    if name == "Bash":
+        detail = data.get("command", "")
+    elif name == "Read":
+        path = data.get("file_path") or data.get("path") or ""
+        rng = ""
+        if data.get("offset") is not None or data.get("limit") is not None:
+            rng = f" offset={data.get('offset', 0)} limit={data.get('limit')}"
+        detail = f"{path}{rng}".strip()
+    elif name in {"Grep", "Glob"}:
+        detail = data.get("pattern", "")
+    elif name in {"Edit", "Write"}:
+        detail = data.get("file_path") or data.get("path") or ""
+    else:
+        detail = " ".join(f"{k}={v}" for k, v in sorted(data.items())[:4])
+    return f"Tool use: {name} {detail}".strip()
+
+
+def _format_tool_result(item: dict) -> str:
+    content = item.get("content", "")
+    text = _extract_content(content) if not isinstance(content, str) else content
+    text = _strip_noise(text).strip()
+    if not text:
+        return ""
+    if len(text) > 4000:
+        head = text[:1800].rstrip()
+        tail = text[-1800:].lstrip()
+        text = f"{head}\n...[tool result truncated]...\n{tail}"
+    return f"Tool result:\n{text}"
+
+
+_NOISE_LINES = (
+    re.compile(r"^\s*Mnemion auto-save checkpoint\b.*$", re.IGNORECASE),
+    re.compile(r"^\s*MemPalace auto-save checkpoint\b.*$", re.IGNORECASE),
+    re.compile(r"^\s*Claude Code system prompt\b.*$", re.IGNORECASE),
+)
+
+
+def _strip_noise(text: str) -> str:
+    lines = []
+    for line in str(text).splitlines():
+        if any(pattern.match(line) for pattern in _NOISE_LINES):
+            continue
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _sanitize_speaker_id(value: str) -> str:
+    cleaned = re.sub(r"[\x00-\x1f\x7f\]\[]", "_", str(value).strip())
+    return cleaned[:80] or "unknown"
 
 
 def _messages_to_transcript(messages: list, spellcheck: bool = True) -> str:
