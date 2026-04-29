@@ -29,7 +29,11 @@ from .chroma_compat import make_persistent_client
 def _get_collection(config=None):
     config = config or MnemionConfig()
     try:
-        client = make_persistent_client(config.anaktoron_path)
+        client = make_persistent_client(
+            config.anaktoron_path,
+            vector_safe=True,
+            collection_name=config.collection_name,
+        )
         return client.get_collection(config.collection_name)
     except Exception as e:
         print(f"Caught exception: {e}")

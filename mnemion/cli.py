@@ -252,6 +252,7 @@ def cmd_repair(args):
                 backup=not getattr(args, "no_backup", False),
                 dry_run=getattr(args, "dry_run", False),
                 assume_yes=getattr(args, "yes", False),
+                all_collections=getattr(args, "all_collections", False),
             )
             print(json.dumps(result, indent=2))
         else:
@@ -979,6 +980,11 @@ def main():
     )
     p_repair.add_argument("--wing", default=None, help="Scan only this wing")
     p_repair.add_argument("--segment", default=None, help="Limit max-seq-id repair to one segment")
+    p_repair.add_argument(
+        "--all-collections",
+        action="store_true",
+        help="For max-seq-id repair, include poisoned rows from every Chroma collection",
+    )
     p_repair.add_argument(
         "--from-sidecar",
         dest="from_sidecar",

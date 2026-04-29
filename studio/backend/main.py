@@ -33,9 +33,11 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from mnemion.chroma_compat import (  # noqa: E402
+    close_chroma_handles,
     hnsw_capacity_status,
     make_persistent_client,
     pin_hnsw_threads,
+    sqlite_metadata_summary,
 )
 from mnemion.config import DRAWER_HNSW_METADATA, MnemionConfig  # noqa: E402
 from mnemion.hybrid_searcher import HybridSearcher  # noqa: E402
@@ -94,8 +96,25 @@ _chroma_client: Optional[chromadb.PersistentClient] = None
 _collection: Optional[chromadb.Collection] = None
 
 
+def _refresh_health() -> dict:
+    global _health, _vector_disabled, _hybrid, _chroma_client, _collection
+    previous_disabled = _vector_disabled
+    _health = hnsw_capacity_status(_config.anaktoron_path, _config.collection_name)
+    _vector_disabled = bool(_health.get("diverged"))
+    if _vector_disabled != previous_disabled:
+        close_chroma_handles()
+        _chroma_client = None
+        _collection = None
+        _hybrid = HybridSearcher(
+            vector_disabled=_vector_disabled,
+            vector_disabled_reason=_health.get("message", ""),
+        )
+    return _health
+
+
 def _get_collection() -> chromadb.Collection:
     global _chroma_client, _collection
+    _refresh_health()
     if _vector_disabled:
         raise HTTPException(
             status_code=503,
@@ -106,7 +125,11 @@ def _get_collection() -> chromadb.Collection:
             },
         )
     if _chroma_client is None:
-        _chroma_client = make_persistent_client(_config.anaktoron_path)
+        _chroma_client = make_persistent_client(
+            _config.anaktoron_path,
+            vector_safe=True,
+            collection_name=_config.collection_name,
+        )
     if _collection is None:
         try:
             _collection = _chroma_client.get_collection(_config.collection_name)
@@ -163,17 +186,21 @@ class LLMConfig(BaseModel):
 
 @app.get("/api/status")
 def get_status():
+    health = _refresh_health()
     if _vector_disabled:
+        summary = sqlite_metadata_summary(_config.anaktoron_path, _config.collection_name)
         return {
             "version": __version__,
-            "total_drawers": _health.get("sqlite_count") or 0,
-            "wing_count": 0,
-            "room_count": 0,
-            "wings": {},
-            "rooms": {},
+            "total_drawers": summary["total_drawers"] or health.get("sqlite_count") or 0,
+            "wing_count": summary["wing_count"],
+            "room_count": summary["room_count"],
+            "wings": summary["wings"],
+            "rooms": summary["rooms"],
+            "metadata_unavailable": summary["metadata_unavailable"],
+            "metadata_message": summary["metadata_message"],
             "anaktoron_path": _config.anaktoron_path,
             "collection_name": _config.collection_name,
-            "health": _health,
+            "health": health,
             "vector_disabled": True,
             "repair_command": "mnemion repair --mode rebuild",
         }
@@ -194,9 +221,11 @@ def get_status():
         "rooms": rooms,
         "anaktoron_path": _config.anaktoron_path,
         "collection_name": _config.collection_name,
-        "health": _health,
+        "health": health,
         "vector_disabled": False,
         "repair_command": "mnemion repair --mode status",
+        "metadata_unavailable": False,
+        "metadata_message": "",
     }
 
 

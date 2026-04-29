@@ -10,6 +10,8 @@ export interface Status {
   health?: AnaktoronHealth
   vector_disabled?: boolean
   repair_command?: string
+  metadata_unavailable?: boolean
+  metadata_message?: string
 }
 
 export interface AnaktoronHealth {
@@ -20,6 +22,20 @@ export interface AnaktoronHealth {
   diverged: boolean
   status: 'ok' | 'diverged' | 'unknown' | string
   message: string
+}
+
+export interface RepairStatus {
+  anaktoron_path: string
+  collection: string
+  drawers: AnaktoronHealth
+  vector_disabled: boolean
+  repair_command: string
+  wing_count?: number
+  room_count?: number
+  wings?: Record<string, number>
+  rooms?: Record<string, number>
+  metadata_unavailable?: boolean
+  metadata_message?: string
 }
 
 export interface TrustSummary {

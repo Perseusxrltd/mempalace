@@ -25,6 +25,14 @@ HNSW_DIVERGENCE_ABSOLUTE = 2_000
 HNSW_DIVERGENCE_FRACTION = 0.10
 
 
+class VectorStoreUnsafe(RuntimeError):
+    """Raised when opening Chroma would load a known-diverged vector segment."""
+
+    def __init__(self, health: dict[str, Any]):
+        self.health = health
+        super().__init__(health.get("message") or "Vector store is unsafe to open")
+
+
 def fix_blob_seq_ids(anaktoron_path: str) -> None:
     """Convert legacy BLOB ``embeddings.seq_id`` rows to INTEGER.
 
@@ -85,9 +93,18 @@ def prepare_anaktoron_for_chroma(anaktoron_path: str) -> None:
     fix_blob_seq_ids(anaktoron_path)
 
 
-def make_persistent_client(anaktoron_path: str):
+def make_persistent_client(
+    anaktoron_path: str,
+    *,
+    vector_safe: bool = False,
+    collection_name: str = "mnemion_drawers",
+):
     """Create a Chroma PersistentClient after storage compatibility checks."""
     prepare_anaktoron_for_chroma(anaktoron_path)
+    if vector_safe:
+        health = hnsw_capacity_status(anaktoron_path, collection_name)
+        if health.get("diverged"):
+            raise VectorStoreUnsafe(health)
     import chromadb
 
     return chromadb.PersistentClient(path=anaktoron_path)
@@ -127,6 +144,17 @@ def close_chroma_handles() -> None:
     except Exception:
         pass
     gc.collect()
+
+
+def verify_hnsw_metadata(collection) -> bool:
+    """Return whether a collection exposes Mnemion's required HNSW metadata."""
+    try:
+        from .config import DRAWER_HNSW_METADATA
+
+        metadata = getattr(collection, "metadata", None) or {}
+        return all(metadata.get(key) == value for key, value in DRAWER_HNSW_METADATA.items())
+    except Exception:
+        return False
 
 
 def _vector_segment_id(anaktoron_path: str, collection_name: str) -> Optional[str]:
@@ -176,6 +204,179 @@ def sqlite_embedding_count(anaktoron_path: str, collection_name: str) -> Optiona
             conn.close()
     except Exception:
         return None
+
+
+def _summary_from_counts(
+    *,
+    total: Optional[int],
+    wings: dict[str, int],
+    rooms: dict[str, int],
+    unavailable: bool,
+    message: str,
+    source: str,
+) -> dict[str, Any]:
+    return {
+        "total_drawers": int(total or 0),
+        "wing_count": len(wings),
+        "room_count": len(rooms),
+        "wings": wings,
+        "rooms": rooms,
+        "metadata_unavailable": unavailable,
+        "metadata_message": message,
+        "metadata_source": source,
+    }
+
+
+def _coerce_meta_value(*values) -> Optional[str]:
+    for value in values:
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _fts_metadata_summary(
+    anaktoron_path: str,
+    collection_name: str,
+    kg_path: Optional[str],
+    message: str,
+) -> dict[str, Any]:
+    kg = (
+        Path(kg_path)
+        if kg_path
+        else Path(anaktoron_path).expanduser().parent / "knowledge_graph.sqlite3"
+    )
+    if not kg.is_file():
+        return _summary_from_counts(
+            total=sqlite_embedding_count(anaktoron_path, collection_name),
+            wings={},
+            rooms={},
+            unavailable=True,
+            message=message or "Chroma metadata unavailable and FTS mirror not found",
+            source="unavailable",
+        )
+    try:
+        conn = sqlite3.connect(f"file:{kg}?mode=ro", uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT COALESCE(wing, 'unknown'), COALESCE(room, 'unknown'), COUNT(*) "
+                "FROM drawers_fts GROUP BY wing, room"
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return _summary_from_counts(
+            total=sqlite_embedding_count(anaktoron_path, collection_name),
+            wings={},
+            rooms={},
+            unavailable=True,
+            message=f"{message}; FTS metadata unavailable: {exc}"
+            if message
+            else f"FTS metadata unavailable: {exc}",
+            source="unavailable",
+        )
+
+    wings: dict[str, int] = {}
+    rooms: dict[str, int] = {}
+    total = 0
+    for wing, room, count in rows:
+        n = int(count)
+        wings[str(wing)] = wings.get(str(wing), 0) + n
+        rooms[str(room)] = rooms.get(str(room), 0) + n
+        total += n
+    return _summary_from_counts(
+        total=total,
+        wings=wings,
+        rooms=rooms,
+        unavailable=False,
+        message="Derived taxonomy from FTS mirror because Chroma metadata was unavailable",
+        source="fts",
+    )
+
+
+def sqlite_metadata_summary(
+    anaktoron_path: str,
+    collection_name: str = "mnemion_drawers",
+    *,
+    kg_path: Optional[str] = None,
+) -> dict[str, Any]:
+    """Summarize collection taxonomy without opening Chroma.
+
+    The primary source is Chroma's SQLite metadata tables. If those are not
+    readable, fall back to the local FTS mirror. The function never raises.
+    """
+    db_path = os.path.join(anaktoron_path, "chroma.sqlite3")
+    sqlite_count = sqlite_embedding_count(anaktoron_path, collection_name)
+    if not os.path.isfile(db_path):
+        return _fts_metadata_summary(
+            anaktoron_path, collection_name, kg_path, "Chroma SQLite database not found"
+        )
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+                ).fetchall()
+            }
+            if not {"collections", "segments", "embeddings", "embedding_metadata"}.issubset(tables):
+                raise sqlite3.OperationalError("required Chroma metadata tables missing")
+
+            rows = conn.execute(
+                """
+                SELECT e.id, m.key, m.string_value, m.int_value, m.float_value, m.bool_value
+                FROM embeddings e
+                JOIN segments s ON e.segment_id = s.id
+                JOIN collections c ON s.collection = c.id
+                LEFT JOIN embedding_metadata m
+                  ON m.id = e.id AND m.key IN ('wing', 'room')
+                WHERE c.name = ?
+                """,
+                (collection_name,),
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception as exc:
+        return _fts_metadata_summary(
+            anaktoron_path,
+            collection_name,
+            kg_path,
+            f"Chroma metadata summary unavailable: {exc}",
+        )
+
+    by_embedding: dict[Any, dict[str, str]] = {}
+    for embedding_id, key, string_value, int_value, float_value, bool_value in rows:
+        by_embedding.setdefault(embedding_id, {})
+        if key:
+            value = _coerce_meta_value(string_value, int_value, float_value, bool_value)
+            if value:
+                by_embedding[embedding_id][str(key)] = value
+
+    wings: dict[str, int] = {}
+    rooms: dict[str, int] = {}
+    for meta in by_embedding.values():
+        wing = meta.get("wing", "unknown")
+        room = meta.get("room", "unknown")
+        wings[wing] = wings.get(wing, 0) + 1
+        rooms[room] = rooms.get(room, 0) + 1
+
+    if sqlite_count and not by_embedding:
+        return _fts_metadata_summary(
+            anaktoron_path,
+            collection_name,
+            kg_path,
+            "Chroma metadata rows were empty despite SQLite embeddings",
+        )
+
+    return _summary_from_counts(
+        total=sqlite_count if sqlite_count is not None else len(by_embedding),
+        wings=wings,
+        rooms=rooms,
+        unavailable=False,
+        message="Derived taxonomy from Chroma SQLite metadata",
+        source="chroma_sqlite",
+    )
 
 
 class _PersistentDataStub:

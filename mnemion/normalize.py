@@ -116,6 +116,7 @@ def _try_claude_code_jsonl(content: str) -> Optional[str]:
     """Claude Code JSONL sessions."""
     lines = [line.strip() for line in content.strip().split("\n") if line.strip()]
     messages = []
+    tool_names: dict[str, str] = {}
     for line in lines:
         try:
             entry = json.loads(line)
@@ -126,15 +127,21 @@ def _try_claude_code_jsonl(content: str) -> Optional[str]:
         msg_type = entry.get("type", "")
         message = entry.get("message", {})
         if msg_type in ("human", "user"):
-            text = _extract_claude_code_content(message.get("content", ""))
+            content_blocks = message.get("content", "")
+            text = _extract_claude_code_content(content_blocks, tool_names=tool_names)
             if text:
-                if text.startswith("Tool result:") and messages and messages[-1][0] == "assistant":
+                if _is_tool_result_only(content_blocks):
+                    if messages and messages[-1][0] == "assistant":
+                        prev_role, prev_text = messages[-1]
+                        messages[-1] = (prev_role, prev_text.rstrip() + "\n\n" + text)
+                    continue
+                if text.startswith("Tool result") and messages and messages[-1][0] == "assistant":
                     prev_role, prev_text = messages[-1]
                     messages[-1] = (prev_role, prev_text.rstrip() + "\n\n" + text)
                 else:
                     messages.append(("user", text))
         elif msg_type == "assistant":
-            text = _extract_claude_code_content(message.get("content", ""))
+            text = _extract_claude_code_content(message.get("content", ""), tool_names=tool_names)
             if text:
                 messages.append(("assistant", text))
     if len(messages) >= 2:
@@ -327,11 +334,26 @@ def _extract_content(content) -> str:
     return ""
 
 
-def _extract_claude_code_content(content) -> str:
+def _is_tool_result_only(content) -> bool:
+    if not isinstance(content, list):
+        return False
+    saw_tool_result = False
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "tool_result":
+            saw_tool_result = True
+            continue
+        if isinstance(item, str) and not item.strip():
+            continue
+        return False
+    return saw_tool_result
+
+
+def _extract_claude_code_content(content, tool_names: Optional[dict[str, str]] = None) -> str:
     if isinstance(content, str):
         return _strip_noise(content)
     if not isinstance(content, list):
         return _extract_content(content)
+    tool_names = tool_names if tool_names is not None else {}
     parts = []
     for item in content:
         if isinstance(item, str):
@@ -341,9 +363,14 @@ def _extract_claude_code_content(content) -> str:
             if kind == "text":
                 parts.append(_strip_noise(item.get("text", "")))
             elif kind == "tool_use":
+                tool_id = item.get("id")
+                tool_name = item.get("name") or item.get("tool_name") or "tool"
+                tool_names["__last__"] = str(tool_name)
+                if tool_id:
+                    tool_names[str(tool_id)] = str(tool_name)
                 parts.append(_format_tool_use(item))
             elif kind == "tool_result":
-                formatted = _format_tool_result(item)
+                formatted = _format_tool_result(item, tool_names=tool_names)
                 if formatted:
                     parts.append(formatted)
     return "\n".join(p for p in parts if p).strip()
@@ -369,17 +396,50 @@ def _format_tool_use(item: dict) -> str:
     return f"Tool use: {name} {detail}".strip()
 
 
-def _format_tool_result(item: dict) -> str:
+def _cap_head_tail(text: str, max_chars: int = 4000) -> str:
+    if len(text) <= max_chars:
+        return text
+    head_len = max_chars // 2 - 200
+    tail_len = max_chars // 2 - 200
+    head = text[:head_len].rstrip()
+    tail = text[-tail_len:].lstrip()
+    return f"{head}\n...[tool result truncated]...\n{tail}"
+
+
+def _cap_match_lines(text: str, visible_each_side: int = 20) -> str:
+    lines = text.splitlines()
+    cap = visible_each_side * 2
+    if len(lines) <= cap:
+        return text
+    omitted = len(lines) - cap
+    return "\n".join(
+        lines[:visible_each_side]
+        + [f"...[{omitted} matches omitted]..."]
+        + lines[-visible_each_side:]
+    )
+
+
+def _format_tool_result(item: dict, tool_names: Optional[dict[str, str]] = None) -> str:
+    tool_use_id = item.get("tool_use_id") or item.get("id")
+    tool_name = ""
+    if tool_use_id and tool_names:
+        tool_name = tool_names.get(str(tool_use_id), "")
+    tool_name = tool_name or item.get("name") or item.get("tool_name")
+    if not tool_name and tool_names:
+        tool_name = tool_names.get("__last__")
+    tool_name = tool_name or "tool"
+    if tool_name in {"Read", "Edit", "Write"}:
+        return ""
     content = item.get("content", "")
     text = _extract_content(content) if not isinstance(content, str) else content
     text = _strip_noise(text).strip()
     if not text:
         return ""
-    if len(text) > 4000:
-        head = text[:1800].rstrip()
-        tail = text[-1800:].lstrip()
-        text = f"{head}\n...[tool result truncated]...\n{tail}"
-    return f"Tool result:\n{text}"
+    if tool_name in {"Grep", "Glob"}:
+        text = _cap_match_lines(text)
+    else:
+        text = _cap_head_tail(text)
+    return f"Tool result ({tool_name}):\n{text}"
 
 
 _NOISE_LINES = (

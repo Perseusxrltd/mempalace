@@ -52,10 +52,12 @@ from .anaktoron_graph import (  # noqa: E402
     traverse,
 )
 from .chroma_compat import (  # noqa: E402
+    close_chroma_handles,
     db_stat,
     hnsw_capacity_status,
     make_persistent_client,
     pin_hnsw_threads,
+    sqlite_metadata_summary,
 )
 from .knowledge_graph import KnowledgeGraph  # noqa: E402
 from .hybrid_searcher import HybridSearcher  # noqa: E402
@@ -129,7 +131,11 @@ def _get_collection(create=False):
             and current_stat != (0, 0.0)
             and abs(current_stat[1] - _client_cache_stat[1]) > 0.01
         ):
-            _client_cache = make_persistent_client(_config.anaktoron_path)
+            _client_cache = make_persistent_client(
+                _config.anaktoron_path,
+                vector_safe=True,
+                collection_name=_config.collection_name,
+            )
             _collection_cache = None
             _client_cache_stat = db_stat(_config.anaktoron_path)
         if create:
@@ -160,13 +166,37 @@ def _no_anaktoron():
     }
 
 
-_WAL_REDACT_KEYS = {"content", "text", "query", "entry"}
+_WAL_REDACT_KEYS = {
+    "content",
+    "text",
+    "query",
+    "entry",
+    "object",
+    "label",
+    "reason",
+    "resolution_note",
+    "note",
+    "description",
+    "source_file",
+    "file_path",
+    "path",
+}
+
+
+def _wal_redacted_value(value):
+    raw = "" if value is None else str(value)
+    return {
+        "redacted": True,
+        "type": type(value).__name__,
+        "length": len(raw),
+        "sha256": hashlib.sha256(raw.encode("utf-8", errors="replace")).hexdigest()[:16],
+    }
 
 
 def _redact_for_wal(value):
     if isinstance(value, dict):
         return {
-            key: ("[redacted]" if key in _WAL_REDACT_KEYS else _redact_for_wal(val))
+            key: (_wal_redacted_value(val) if key in _WAL_REDACT_KEYS else _redact_for_wal(val))
             for key, val in value.items()
         }
     if isinstance(value, list):
@@ -231,11 +261,18 @@ def _iter_all_metadatas(col, where=None):
 def tool_status():
     col = _get_collection()
     if _vector_disabled:
+        summary = sqlite_metadata_summary(
+            _config.anaktoron_path, _config.collection_name, kg_path=_kg_path
+        )
         return {
             "version": __version__,
-            "total_drawers": _vector_health.get("sqlite_count") or 0,
-            "wings": {},
-            "rooms": {},
+            "total_drawers": summary["total_drawers"] or _vector_health.get("sqlite_count") or 0,
+            "wing_count": summary["wing_count"],
+            "room_count": summary["room_count"],
+            "wings": summary["wings"],
+            "rooms": summary["rooms"],
+            "metadata_unavailable": summary["metadata_unavailable"],
+            "metadata_message": summary["metadata_message"],
             "anaktoron_path": _config.anaktoron_path,
             "protocol": ANAKTORON_PROTOCOL,
             "aaak_dialect": AAAK_SPEC,
@@ -567,16 +604,52 @@ def tool_update_drawer(
                 "added_by": "mcp",
             }
         )
-        col.upsert(ids=[new_id], documents=[new_content], metadatas=[meta])
-        _sync_fts(new_id, new_content, new_wing, new_room)
-        _trust.create(new_id, wing=new_wing, room=new_room)
-        _trust.update_status(
-            drawer_id,
-            "superseded",
-            superseded_by=new_id,
-            reason="drawer content updated",
-            changed_by="mcp",
-        )
+        inserted_chroma = False
+        synced_fts = False
+        created_trust = False
+        rollback_errors = []
+        try:
+            col.upsert(ids=[new_id], documents=[new_content], metadatas=[meta])
+            inserted_chroma = True
+            _sync_fts(new_id, new_content, new_wing, new_room)
+            synced_fts = True
+            _trust.create(new_id, wing=new_wing, room=new_room)
+            created_trust = True
+            trust_result = _trust.update_status(
+                drawer_id,
+                "superseded",
+                superseded_by=new_id,
+                reason="drawer content updated",
+                changed_by="mcp",
+            )
+            if isinstance(trust_result, dict) and trust_result.get("error"):
+                raise RuntimeError(trust_result["error"])
+        except Exception as exc:
+            if inserted_chroma:
+                try:
+                    col.delete(ids=[new_id])
+                except Exception as rollback_exc:
+                    rollback_errors.append(f"chroma: {rollback_exc}")
+            if synced_fts:
+                try:
+                    _delete_fts(new_id)
+                except Exception as rollback_exc:
+                    rollback_errors.append(f"fts: {rollback_exc}")
+            if created_trust:
+                try:
+                    _trust.update_status(
+                        new_id,
+                        "historical",
+                        reason="rollback after failed drawer update",
+                        changed_by="mcp",
+                    )
+                except Exception as rollback_exc:
+                    rollback_errors.append(f"trust: {rollback_exc}")
+            return {
+                "success": False,
+                "error": f"Failed to update drawer safely: {exc}",
+                "rollback_errors": rollback_errors,
+            }
         _cd.spawn_detection(new_id, new_content, new_wing, new_room, _trust, _hybrid)
         return {
             "success": True,
@@ -666,10 +739,13 @@ def tool_follow_tunnels(wing: str, room: str):
 
 
 def tool_reconnect():
-    global _client_cache, _collection_cache, _client_cache_stat
+    global _client_cache, _collection_cache, _client_cache_stat, _kg, _trust
+    close_chroma_handles()
     _client_cache = None
     _collection_cache = None
     _client_cache_stat = (0, 0.0)
+    _kg = KnowledgeGraph(db_path=_kg_path)
+    _trust = DrawerTrust(db_path=_kg_path)
     health = _refresh_vector_disabled_flag()
     return {"success": True, "health": health, "vector_disabled": _vector_disabled}
 
@@ -836,15 +912,15 @@ def tool_get_contested():
 
 def tool_resolve_contest(drawer_id: str, winner_id: str, resolution_note: str = ""):
     """
-    _write_wal(
-        "mnemion_resolve_contest",
-        {"drawer_id": drawer_id, "winner_id": winner_id, "resolution_note": resolution_note},
-    )
     Manually resolve a contested memory.
     drawer_id: one of the two conflicting drawers (the contested one).
     winner_id: the drawer_id that wins (the correct/current version).
     The other one is marked superseded.
     """
+    _write_wal(
+        "mnemion_resolve_contest",
+        {"drawer_id": drawer_id, "winner_id": winner_id, "resolution_note": resolution_note},
+    )
     # Determine the loser — it's whichever of the pair is NOT the winner.
     # Both drawer_id and winner_id must be valid trust records.
     if drawer_id == winner_id:

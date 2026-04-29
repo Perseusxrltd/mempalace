@@ -11,4 +11,5 @@
 - Added source adapter plugin scaffolding under `mnemion.sources`.
 - Added first-run origin detection and `mnemion init --auto-mine` / `mnemion mine --redetect-origin`.
 - Added Studio Anaktoron health fields and dashboard/status-bar health surfacing.
-- Raised the coverage ratchet to 40% without excluding legacy modules; the path to 50% is documented in the verification report.
+- Kept the coverage ratchet at 40% without excluding legacy modules; future ratchets should target 50% first, then 70%+ as legacy CLI/librarian/layer paths gain focused tests.
+- Hardened repair follow-up behavior: rebuild now uses a verified temporary collection swap, prune keeps FTS/trust consistent after confirmed Chroma deletes, and `max-seq-id` repair is scoped to the configured drawer collection by default.

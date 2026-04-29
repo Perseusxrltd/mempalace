@@ -106,9 +106,138 @@ def test_claude_code_preserves_tool_use_and_merges_tool_result():
     try:
         result = normalize(path)
         assert "Tool use: Read src/app.py" in result
-        assert "Tool result:" in result
-        assert "def app()" in result
+        assert "Tool result:" not in result
+        assert "def app()" not in result
         assert "The file returns ok." in result
+    finally:
+        os.unlink(path)
+
+
+def test_claude_code_bash_tool_result_is_capped_and_merged():
+    long_output = "\n".join(f"line {i}" for i in range(600))
+    path = _write_temp(
+        "\n".join(
+            [
+                json.dumps({"type": "user", "message": {"content": "Run tests"}}),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "toolu_bash",
+                                    "name": "Bash",
+                                    "input": {"command": "pytest -q"},
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "toolu_bash",
+                                    "content": long_output,
+                                }
+                            ]
+                        },
+                    }
+                ),
+            ]
+        )
+    )
+    try:
+        result = normalize(path)
+        assert "Tool use: Bash pytest -q" in result
+        assert "Tool result (Bash):" in result
+        assert "...[tool result truncated]..." in result
+        assert "line 0" in result
+        assert "line 599" in result
+    finally:
+        os.unlink(path)
+
+
+def test_claude_code_orphan_tool_result_does_not_create_fake_user_turn():
+    path = _write_temp(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "toolu_orphan",
+                                    "content": "orphan output",
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps({"type": "user", "message": {"content": "Actual user text"}}),
+                json.dumps({"type": "assistant", "message": {"content": "Actual reply"}}),
+            ]
+        )
+    )
+    try:
+        result = normalize(path)
+        assert "orphan output" not in result
+        assert "> Actual user text" in result
+        assert "Actual reply" in result
+    finally:
+        os.unlink(path)
+
+
+def test_claude_code_grep_result_is_capped():
+    matches = "\n".join(f"match {i}" for i in range(80))
+    path = _write_temp(
+        "\n".join(
+            [
+                json.dumps({"type": "user", "message": {"content": "Search logs"}}),
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "id": "toolu_grep",
+                                    "name": "Grep",
+                                    "input": {"pattern": "needle"},
+                                }
+                            ]
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "toolu_grep",
+                                    "content": matches,
+                                }
+                            ]
+                        },
+                    }
+                ),
+            ]
+        )
+    )
+    try:
+        result = normalize(path)
+        assert "Tool result (Grep):" in result
+        assert "match 0" in result
+        assert "match 39" not in result
+        assert "...[40 matches omitted]..." in result
     finally:
         os.unlink(path)
 

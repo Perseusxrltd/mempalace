@@ -11,12 +11,14 @@ import os
 
 sys.path.insert(0, os.path.expanduser("~/projects/mnemion"))
 
-import chromadb
+from mnemion.chroma_compat import make_persistent_client
 from mnemion.config import MnemionConfig
 from mnemion.trust_lifecycle import DrawerTrust
 
 config = MnemionConfig()
-client = chromadb.PersistentClient(path=config.anaktoron_path)
+client = make_persistent_client(
+    config.anaktoron_path, vector_safe=True, collection_name=config.collection_name
+)
 
 try:
     col = client.get_collection(config.collection_name)

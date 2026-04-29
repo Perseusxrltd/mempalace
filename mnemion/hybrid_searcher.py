@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any, Set
 
 from .config import MnemionConfig
-from .chroma_compat import make_persistent_client
+from .chroma_compat import VectorStoreUnsafe, make_persistent_client
 
 # Statuses excluded from search by default
 _HIDDEN_STATUSES: Set[str] = {"superseded", "historical"}
@@ -176,9 +176,18 @@ class HybridSearcher:
         self.chroma_client = None
         self.collection = None
         if not self.vector_disabled:
-            self.chroma_client = make_persistent_client(self.anaktoron_path)
             try:
+                self.chroma_client = make_persistent_client(
+                    self.anaktoron_path,
+                    vector_safe=True,
+                    collection_name=self.collection_name,
+                )
                 self.collection = self.chroma_client.get_collection(self.collection_name)
+            except VectorStoreUnsafe as exc:
+                self.vector_disabled = True
+                self.vector_disabled_reason = exc.health.get("message", str(exc))
+                self.chroma_client = None
+                self.collection = None
             except Exception:
                 # Anaktoron not yet initialized — search will return empty results.
                 self.collection = None

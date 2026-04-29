@@ -217,7 +217,11 @@ def run_librarian(
     kg = KnowledgeGraph(kg_path)
     hybrid = HybridSearcher(anaktoron_path=anaktoron_path, kg_path=kg_path)
 
-    client = make_persistent_client(anaktoron_path)
+    client = make_persistent_client(
+        anaktoron_path,
+        vector_safe=True,
+        collection_name=cfg.collection_name,
+    )
     try:
         collection = client.get_collection(cfg.collection_name)
     except Exception as e:
