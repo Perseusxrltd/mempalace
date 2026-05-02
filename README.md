@@ -506,6 +506,11 @@ Mnemion began as a fork of mempalace, which introduced the memory Anaktoron meta
 
 ## Changelog
 
+### v3.5.2 — Windows install smoke hardening
+
+- Fixed console-script launches on Windows terminals that default to cp1252 by forcing UTF-8 stdout/stderr before CLI output.
+- Added `mnemion --version` so installed users can verify the global command without importing Python manually.
+
 ### v3.5.1 — MemPalace catch-up + release hardening
 
 - Added typed Chroma backend wrappers, safer collection metadata, embedding-device selection, and read-only repair visibility for max-seq-id/HNSW/stale-segment state.

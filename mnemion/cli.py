@@ -46,6 +46,14 @@ import argparse
 from pathlib import Path
 
 from .config import MnemionConfig
+from .version import __version__
+
+
+def _configure_stdio() -> None:
+    """Keep Unicode CLI output from crashing on cp1252 Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def cmd_init(args):
@@ -1026,11 +1034,13 @@ def cmd_compress(args):
 
 
 def main():
+    _configure_stdio()
     parser = argparse.ArgumentParser(
         description="Mnemion — Give your AI a memory. No API key required.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
+    parser.add_argument("--version", action="version", version=f"mnemion {__version__}")
     parser.add_argument(
         "--palace",  # kept for backward compat; controls anaktoron_path
         default=None,
