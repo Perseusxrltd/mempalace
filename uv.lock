@@ -1934,7 +1934,7 @@ wheels = [
 
 [[package]]
 name = "mnemion"
-version = "3.5.2"
+version = "3.5.3"
 source = { editable = "." }
 dependencies = [
     { name = "chromadb" },
@@ -1998,7 +1998,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "autocorrect", marker = "extra == 'spellcheck'", specifier = ">=2.0" },
-    { name = "chromadb", specifier = ">=0.5.0,<2.0" },
+    { name = "chromadb", specifier = ">=0.6.3,<0.7" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.115.0" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'studio'", specifier = ">=0.115.0" },
     { name = "numpy", marker = "extra == 'lewm'", specifier = ">=1.24" },

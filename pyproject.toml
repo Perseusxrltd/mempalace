@@ -1,6 +1,6 @@
 [project]
 name = "mnemion"
-version = "3.5.2"
+version = "3.5.3"
 description = "Mnemion — persistent AI memory with hybrid retrieval, trust lifecycle, and behavioral protocol. No API key required."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,7 +27,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "chromadb>=0.5.0,<2.0",
+    "chromadb>=0.6.3,<0.7",
     "onnxruntime==1.19.2; python_version < '3.10'",
     "onnxruntime==1.20.1; python_version >= '3.10' and python_version < '3.11'",
     "pyyaml>=6.0",

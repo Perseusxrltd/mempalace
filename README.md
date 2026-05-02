@@ -506,6 +506,10 @@ Mnemion began as a fork of mempalace, which introduced the memory Anaktoron meta
 
 ## Changelog
 
+### v3.5.3 — Clean install dependency hardening
+
+- Tightened the public Chroma dependency range to the known-good `0.6.x` line so a clean user-level install does not resolve to incompatible Chroma/OpenTelemetry/protobuf combinations.
+
 ### v3.5.2 — Windows install smoke hardening
 
 - Fixed console-script launches on Windows terminals that default to cp1252 by forcing UTF-8 stdout/stderr before CLI output.
