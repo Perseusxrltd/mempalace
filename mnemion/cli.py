@@ -33,6 +33,9 @@ Commands:
     mnemion librarian                   Run daily background tidy-up (contradiction scan + re-classification + KG)
     mnemion librarian --dry-run         Preview without writing conflicts/trust/KG/state
     mnemion librarian --status          Show librarian state and pending count
+    mnemion obsidian setup              Create/refresh and open the owned Obsidian mirror
+    mnemion obsidian sync               Refresh the owned Obsidian mirror without opening it
+    mnemion obsidian status             Show mirror path, sync, and registration state
 
 Examples:
     mnemion init ~/projects/my_app
@@ -75,7 +78,9 @@ def cmd_init(args):
     origin_path = persist_origin(project_path, origin)
     if origin.likely_ai_dialogue:
         personas = ", ".join(origin.agent_persona_names) or "unknown"
-        print(f"  Corpus origin: AI dialogue ({origin.primary_platform or 'unknown'}; personas: {personas})")
+        print(
+            f"  Corpus origin: AI dialogue ({origin.primary_platform or 'unknown'}; personas: {personas})"
+        )
     print(f"  Origin saved: {origin_path}")
 
     # Pass 1: auto-detect people and projects from manifests, git, and prose content
@@ -136,7 +141,9 @@ def cmd_init(args):
         from .miner import mine
 
         anaktoron_path = (
-            os.path.expanduser(args.palace) if getattr(args, "palace", None) else MnemionConfig().anaktoron_path
+            os.path.expanduser(args.palace)
+            if getattr(args, "palace", None)
+            else MnemionConfig().anaktoron_path
         )
         mine(project_dir=str(project_path), anaktoron_path=anaktoron_path)
 
@@ -391,7 +398,9 @@ def cmd_sweep(args):
     from .sweeper import sweep
 
     anaktoron_path = (
-        os.path.expanduser(args.palace) if getattr(args, "palace", None) else MnemionConfig().anaktoron_path
+        os.path.expanduser(args.palace)
+        if getattr(args, "palace", None)
+        else MnemionConfig().anaktoron_path
     )
     stats = sweep(
         args.path,
@@ -449,7 +458,9 @@ def cmd_reconstruct(args):
     from .reconstruction import reconstruct_query
 
     anaktoron_path = (
-        os.path.expanduser(args.palace) if getattr(args, "palace", None) else MnemionConfig().anaktoron_path
+        os.path.expanduser(args.palace)
+        if getattr(args, "palace", None)
+        else MnemionConfig().anaktoron_path
     )
     result = reconstruct_query(
         query=args.query,
@@ -528,6 +539,99 @@ def cmd_moat_eval(args):
     from .moat_eval import run_moat_eval
 
     print(json.dumps(run_moat_eval(suite=args.suite), indent=2))
+
+
+def _obsidian_vault_path(args) -> Path:
+    cfg = MnemionConfig()
+    return Path(getattr(args, "vault", None) or cfg.obsidian_vault_path).expanduser()
+
+
+def _obsidian_collection_and_db(args):
+    from .backends.registry import get_backend
+
+    cfg = MnemionConfig()
+    anaktoron_path = (
+        os.path.expanduser(args.palace) if getattr(args, "palace", None) else cfg.anaktoron_path
+    )
+    backend = get_backend(anaktoron_path=anaktoron_path)
+    collection = backend.get_collection(cfg.collection_name, create=False)
+    kg_db_path = Path(anaktoron_path).expanduser().parent / "knowledge_graph.sqlite3"
+    return collection, kg_db_path
+
+
+def cmd_obsidian(args):
+    """Manage Mnemion's one-way owned Obsidian mirror."""
+    import json
+
+    from .obsidian import (
+        ObsidianSafetyError,
+        open_obsidian_vault,
+        register_obsidian_vault,
+        sync_obsidian_vault,
+        vault_status,
+    )
+
+    action = getattr(args, "obsidian_action", None)
+    vault = _obsidian_vault_path(args)
+
+    try:
+        if action == "status":
+            result = vault_status(vault)
+            print("Obsidian Mirror")
+            print(f"Vault: {vault}")
+            print(json.dumps(result, indent=2))
+            return
+
+        if action == "open":
+            result = open_obsidian_vault(vault, dry_run=getattr(args, "dry_run", False))
+            print(json.dumps(result, indent=2))
+            return
+
+        if action == "sync":
+            collection, kg_db_path = _obsidian_collection_and_db(args)
+            result = sync_obsidian_vault(
+                vault,
+                collection,
+                kg_db_path,
+                wing=getattr(args, "wing", None),
+                force_existing=getattr(args, "force_existing", False),
+                dry_run=getattr(args, "dry_run", False),
+            )
+            print(json.dumps(result, indent=2))
+            return
+
+        if action == "setup":
+            collection, kg_db_path = _obsidian_collection_and_db(args)
+            sync_result = sync_obsidian_vault(
+                vault,
+                collection,
+                kg_db_path,
+                wing=getattr(args, "wing", None),
+                force_existing=getattr(args, "force_existing", False),
+                dry_run=getattr(args, "dry_run", False),
+            )
+            register_result = register_obsidian_vault(
+                vault,
+                dry_run=getattr(args, "dry_run", False),
+            )
+            open_result = open_obsidian_vault(vault, dry_run=getattr(args, "dry_run", False))
+            print(
+                json.dumps(
+                    {
+                        "sync": sync_result,
+                        "registration": register_result,
+                        "open": open_result,
+                    },
+                    indent=2,
+                )
+            )
+            return
+    except ObsidianSafetyError as exc:
+        print(f"Obsidian mirror safety error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+    print("Unknown obsidian action", file=sys.stderr)
+    raise SystemExit(2)
 
 
 def _count_json_objects(filepath):
@@ -1275,6 +1379,47 @@ def main():
     llm_sub.add_parser("start", help="Start the LLM server (auto-start must be configured)")
     llm_sub.add_parser("stop", help="Stop the LLM server")
 
+    # obsidian
+    p_obsidian = sub.add_parser(
+        "obsidian",
+        help="Create and manage the one-way owned Obsidian mirror",
+    )
+    obsidian_sub = p_obsidian.add_subparsers(dest="obsidian_action")
+
+    def _add_obsidian_common(p, *, sync: bool = False):
+        p.add_argument(
+            "--vault",
+            default=None,
+            help="Mirror vault path (default: config obsidian_vault_path or ~/.mnemion/obsidian-vault)",
+        )
+        p.add_argument("--dry-run", action="store_true", help="Preview without writing/opening")
+        if sync:
+            p.add_argument("--wing", default=None, help="Limit mirror to one wing")
+            p.add_argument(
+                "--force-existing",
+                action="store_true",
+                help="Allow syncing into a non-empty folder without an existing Mnemion manifest",
+            )
+
+    p_obsidian_setup = obsidian_sub.add_parser(
+        "setup",
+        help="Create/refresh, register, and open the owned mirror",
+    )
+    _add_obsidian_common(p_obsidian_setup, sync=True)
+    p_obsidian_sync = obsidian_sub.add_parser(
+        "sync",
+        help="Refresh the owned mirror without opening Obsidian",
+    )
+    _add_obsidian_common(p_obsidian_sync, sync=True)
+    p_obsidian_open = obsidian_sub.add_parser("open", help="Open the owned mirror in Obsidian")
+    _add_obsidian_common(p_obsidian_open)
+    p_obsidian_status = obsidian_sub.add_parser("status", help="Show owned mirror status")
+    p_obsidian_status.add_argument(
+        "--vault",
+        default=None,
+        help="Mirror vault path (default: config obsidian_vault_path or ~/.mnemion/obsidian-vault)",
+    )
+
     # restore
     p_restore = sub.add_parser(
         "restore",
@@ -1353,6 +1498,13 @@ def main():
         cmd_llm(args)
         return
 
+    if args.command == "obsidian":
+        if getattr(args, "obsidian_action", None) not in {"setup", "sync", "open", "status"}:
+            p_obsidian.print_help()
+            return
+        cmd_obsidian(args)
+        return
+
     if args.command == "hook":
         if not getattr(args, "hook_action", None):
             p_hook.print_help()
@@ -1397,6 +1549,7 @@ def main():
         "repair": cmd_repair,
         "status": cmd_status,
         "llm": cmd_llm,
+        "obsidian": cmd_obsidian,
         "librarian": cmd_librarian,
     }
     dispatch[args.command](args)

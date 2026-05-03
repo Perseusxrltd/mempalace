@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import pickle
 import sqlite3
@@ -33,7 +35,9 @@ def _make_chroma_db(
         conn.execute("CREATE TABLE collections (id TEXT PRIMARY KEY, name TEXT)")
         conn.execute("CREATE TABLE segments (id TEXT PRIMARY KEY, collection TEXT, scope TEXT)")
         conn.execute("CREATE TABLE embeddings (id TEXT PRIMARY KEY, segment_id TEXT)")
-        conn.execute("CREATE TABLE collection_metadata (collection_id TEXT, key TEXT, int_value INTEGER)")
+        conn.execute(
+            "CREATE TABLE collection_metadata (collection_id TEXT, key TEXT, int_value INTEGER)"
+        )
         conn.execute("INSERT INTO collections VALUES ('collection-a', ?)", (collection_name,))
         conn.execute("INSERT INTO segments VALUES (?, 'collection-a', 'VECTOR')", (segment_id,))
         conn.executemany(
@@ -42,8 +46,7 @@ def _make_chroma_db(
         )
         if sync_threshold is not None:
             conn.execute(
-                "INSERT INTO collection_metadata VALUES "
-                "('collection-a', 'hnsw:sync_threshold', ?)",
+                "INSERT INTO collection_metadata VALUES ('collection-a', 'hnsw:sync_threshold', ?)",
                 (sync_threshold,),
             )
     return db
@@ -108,11 +111,13 @@ def test_read_sync_threshold_falls_back_to_collection_config_json(tmp_path):
     anaktoron = tmp_path / "anaktoron"
     anaktoron.mkdir()
     with sqlite3.connect(anaktoron / "chroma.sqlite3") as conn:
-        conn.execute("CREATE TABLE collections (id TEXT PRIMARY KEY, name TEXT, config_json_str TEXT)")
+        conn.execute(
+            "CREATE TABLE collections (id TEXT PRIMARY KEY, name TEXT, config_json_str TEXT)"
+        )
         conn.execute(
             "INSERT INTO collections VALUES "
             "('collection-a', 'mnemion_drawers', "
-            "'{\"hnsw_configuration\":{\"sync_threshold\":12345}}')"
+            '\'{"hnsw_configuration":{"sync_threshold":12345}}\')'
         )
 
     assert _read_sync_threshold(str(anaktoron), "mnemion_drawers") == 12345

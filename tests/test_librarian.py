@@ -77,9 +77,7 @@ def test_librarian_dry_run_does_not_write_conflicts_or_state(monkeypatch, tmp_pa
     monkeypatch.setattr(
         librarian,
         "_extract_kg_triples",
-        lambda *_args, **_kwargs: [
-            {"subject": "Mnemion", "relation": "uses", "object": "GraphQL"}
-        ],
+        lambda *_args, **_kwargs: [{"subject": "Mnemion", "relation": "uses", "object": "GraphQL"}],
     )
 
     result = librarian.run_librarian(limit=1, dry_run=True)

@@ -122,6 +122,7 @@ quarantine anything. The CSV columns are `drawer_id`, `risk_type`, `score`,
 | `embedding_device` | `MNEMION_EMBEDDING_DEVICE` | `auto` | Embedding provider target: `auto`, `cpu`, `cuda`, `dml`, or `coreml`. |
 | `entity_languages` | `MNEMION_ENTITY_LANGUAGES` | `en` | Entity pattern locales, comma-separated. |
 | `topic_tunnel_min_count` | `MNEMION_TOPIC_TUNNEL_MIN_COUNT` | `2` | Minimum drawer support before a repeated cue becomes a topic tunnel. |
+| `obsidian_vault_path` | `MNEMION_OBSIDIAN_VAULT_PATH` | `~/.mnemion/obsidian-vault` | Owned one-way Obsidian Markdown mirror path. |
 
 ## Current Boundary
 

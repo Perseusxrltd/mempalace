@@ -59,3 +59,17 @@ def test_init():
     cfg = MnemionConfig(config_dir=tmpdir)
     cfg.init()
     assert os.path.exists(os.path.join(tmpdir, "config.json"))
+
+
+def test_obsidian_vault_path_config_and_env():
+    tmpdir = tempfile.mkdtemp()
+    with open(os.path.join(tmpdir, "config.json"), "w") as f:
+        json.dump({"obsidian_vault_path": "/custom/vault"}, f)
+    cfg = MnemionConfig(config_dir=tmpdir)
+    assert cfg.obsidian_vault_path == "/custom/vault"
+
+    os.environ["MNEMION_OBSIDIAN_VAULT_PATH"] = "/env/vault"
+    try:
+        assert MnemionConfig(config_dir=tmpdir).obsidian_vault_path == "/env/vault"
+    finally:
+        del os.environ["MNEMION_OBSIDIAN_VAULT_PATH"]

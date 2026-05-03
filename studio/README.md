@@ -12,7 +12,7 @@ A local web dashboard for Mnemion — visualise your Anaktoron, connect AI agent
 | **Search** | `/search` | Hybrid semantic + keyword search, supports `wing:` / `room:` operators |
 | **Agents** | `/agents` | Live heartbeat status of connected MCP agents |
 | **Connect** | `/connect` | One-click install of Mnemion into every MCP-capable client on your system |
-| **Settings** | `/settings` | LLM backend config, Anaktoron path, vault export |
+| **Settings** | `/settings` | LLM backend config, Anaktoron path, Obsidian mirror |
 
 ## Quick start (Windows)
 
@@ -101,6 +101,16 @@ X-Mnemion-Studio-Token: <token>
 
 Packaged Electron generates or inherits this token, passes it to the backend process as `MNEMION_STUDIO_TOKEN`, and exposes it to the frontend through the preload bridge. Browser-only development can leave the env var unset, or set it and provide the same header from local tooling.
 
+## Obsidian mirror
+
+Settings exposes the same owned mirror as the CLI:
+
+- `Create/Refresh & Open` writes the managed Markdown vault, best-effort registers it with Obsidian, then opens it through `obsidian://`.
+- `Refresh Only` updates the mirror without opening Obsidian.
+- `Download ZIP` streams the same Markdown rendering as a ZIP for manual import or review.
+
+The default target is `~/.mnemion/obsidian-vault`, overridable with `obsidian_vault_path` or `MNEMION_OBSIDIAN_VAULT_PATH`. Mnemion remains the source of truth; the vault is a one-way mirror.
+
 ## Build checks
 
 ```bash
@@ -141,6 +151,7 @@ All endpoints under `/api`; typed client in `frontend/src/api/client.ts`. Mutati
 - **Agents:** `/agents`
 - **Connectors:** `/connectors`, `/connectors/{id}`, `/connectors/{id}/install`, `/connectors/{id}/uninstall`
 - **Config:** `/config` (GET), `/config/llm` (PUT)
-- **Export:** `/export/vault?wing=...` — streams an Obsidian-compatible ZIP
+- **Obsidian:** `/obsidian/status`, `/obsidian/sync`, `/obsidian/open`
+- **Export:** `/export/vault?wing=...` — streams the Obsidian-compatible mirror as a ZIP
 
 OpenAPI docs at **http://127.0.0.1:7891/api/docs**.

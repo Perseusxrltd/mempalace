@@ -63,8 +63,10 @@ def test_sweep_can_consolidate_after_ingest(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(
         cli,
         "_consolidate_anaktoron",
-        lambda **kwargs: calls.append(kwargs)
-        or {"drawers_consolidated": 2, "units_inserted": 4, "edges_inserted": 1},
+        lambda **kwargs: (
+            calls.append(kwargs)
+            or {"drawers_consolidated": 2, "units_inserted": 4, "edges_inserted": 1}
+        ),
     )
 
     cli.cmd_sweep(

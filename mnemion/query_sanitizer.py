@@ -10,7 +10,9 @@ MIN_QUERY_LENGTH = 10
 
 _EXPLICIT_QUERY_PATTERNS = [
     re.compile(r"\bquery\s*:\s*(.+?)(?:\s+(?:return|respond|cite|use|do not)\b|$)", re.I | re.S),
-    re.compile(r"\bsearch(?:\s+for)?\s*:\s*(.+?)(?:\s+(?:return|respond|cite|use|do not)\b|$)", re.I | re.S),
+    re.compile(
+        r"\bsearch(?:\s+for)?\s*:\s*(.+?)(?:\s+(?:return|respond|cite|use|do not)\b|$)", re.I | re.S
+    ),
     re.compile(r"\bfind\s*:\s*(.+?)(?:\s+(?:return|respond|cite|use|do not)\b|$)", re.I | re.S),
 ]
 

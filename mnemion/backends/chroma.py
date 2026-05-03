@@ -358,8 +358,7 @@ def hnsw_capacity_status(
         else:
             out["status"] = "ok"
             out["message"] = (
-                f"HNSW {hnsw_count:,} / SQLite {sqlite_count:,} "
-                "(within flush-lag tolerance)"
+                f"HNSW {hnsw_count:,} / SQLite {sqlite_count:,} (within flush-lag tolerance)"
             )
     except Exception:
         logger.debug("hnsw_capacity_status failed", exc_info=True)
@@ -379,9 +378,7 @@ def _pin_hnsw_threads(collection) -> None:
         return
     try:
         collection.modify(
-            configuration=UpdateCollectionConfiguration(
-                hnsw=UpdateHNSWConfiguration(num_threads=1)
-            )
+            configuration=UpdateCollectionConfiguration(hnsw=UpdateHNSWConfiguration(num_threads=1))
         )
     except Exception:
         logger.debug("_pin_hnsw_threads modify failed", exc_info=True)

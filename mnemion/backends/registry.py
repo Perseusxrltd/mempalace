@@ -28,7 +28,11 @@ def _load_entrypoints() -> None:
     _ENTRYPOINTS_LOADED = True
     try:
         eps = metadata.entry_points()
-        selected = eps.select(group=ENTRY_POINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRY_POINT_GROUP, [])
+        selected = (
+            eps.select(group=ENTRY_POINT_GROUP)
+            if hasattr(eps, "select")
+            else eps.get(ENTRY_POINT_GROUP, [])
+        )
         for ep in selected:
             if ep.name not in _BACKENDS:
                 _BACKENDS[ep.name] = ep.load()

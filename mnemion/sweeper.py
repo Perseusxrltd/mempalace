@@ -27,7 +27,9 @@ def _flatten_content(value: Any) -> str:
                 if block_type == "text":
                     parts.append(str(item.get("text", "")))
                 elif block_type == "tool_use":
-                    parts.append(f"tool_use: {item.get('name', 'unknown')} {json.dumps(item.get('input', {}), sort_keys=True)}")
+                    parts.append(
+                        f"tool_use: {item.get('name', 'unknown')} {json.dumps(item.get('input', {}), sort_keys=True)}"
+                    )
                 elif block_type == "tool_result":
                     parts.append(f"tool_result: {_flatten_content(item.get('content'))}")
                 else:
@@ -43,7 +45,9 @@ def _flatten_content(value: Any) -> str:
 def _normalise_row(data: dict[str, Any], path: Path, line_number: int) -> dict[str, Any] | None:
     message = data.get("message") if isinstance(data.get("message"), dict) else data
     role = message.get("role") or data.get("role")
-    content = _flatten_content(message.get("content") if "content" in message else data.get("content"))
+    content = _flatten_content(
+        message.get("content") if "content" in message else data.get("content")
+    )
     if not role or not content.strip():
         return None
 

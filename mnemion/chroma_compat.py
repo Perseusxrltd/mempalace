@@ -115,9 +115,7 @@ def fix_legacy_collection_config_json(anaktoron_path: str) -> None:
     try:
         with sqlite3.connect(db_path) as conn:
             try:
-                rows = conn.execute(
-                    "SELECT rowid, config_json_str FROM collections"
-                ).fetchall()
+                rows = conn.execute("SELECT rowid, config_json_str FROM collections").fetchall()
             except sqlite3.OperationalError:
                 return
 

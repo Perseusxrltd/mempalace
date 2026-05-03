@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Settings, Server, Database, Brain, CheckCircle, AlertCircle, Save, ExternalLink, Download, FolderOpen } from 'lucide-react'
+import { Settings, Server, Database, Brain, CheckCircle, AlertCircle, Save, ExternalLink, Download, FolderOpen, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
-import type { StudioConfig } from '../types'
+import type { ObsidianStatus, StudioConfig } from '../types'
 
 function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
   return (
@@ -40,6 +40,10 @@ export default function SettingsView() {
     queryKey: ['config'],
     queryFn: api.config,
   })
+  const { data: obsidianStatus } = useQuery<ObsidianStatus>({
+    queryKey: ['obsidian-status'],
+    queryFn: api.obsidianStatus,
+  })
 
   const [llmBackend, setLlmBackend] = useState('')
   const [llmUrl, setLlmUrl] = useState('')
@@ -65,6 +69,17 @@ export default function SettingsView() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     },
+  })
+  const syncObsidianMut = useMutation({
+    mutationFn: api.syncObsidian,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['obsidian-status'] }),
+  })
+  const setupObsidianMut = useMutation({
+    mutationFn: async () => {
+      await api.syncObsidian()
+      return api.openObsidian()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['obsidian-status'] }),
   })
 
   if (isLoading) {
@@ -182,29 +197,52 @@ export default function SettingsView() {
         </div>
       </Section>
 
-      <Section title="Obsidian Vault Export" icon={FolderOpen}>
-        <p className="text-xs text-muted mb-4">
-          Export your entire Anaktoron as Obsidian-compatible Markdown files with YAML frontmatter.
-          Open the resulting folder as a vault in Obsidian to browse your memories visually.
-        </p>
+      <Section title="Obsidian Mirror" icon={FolderOpen}>
+        <div className="space-y-2 mb-4">
+          <Field label="Vault" value={obsidianStatus?.vault_path ?? ''} mono />
+          <Field label="Registered" value={obsidianStatus?.registered ? 'yes' : 'no'} />
+          <Field label="Markdown files" value={String(obsidianStatus?.file_count ?? 0)} />
+          <Field label="Drawers" value={String(obsidianStatus?.drawer_count ?? 0)} />
+          <Field label="Last sync" value={obsidianStatus?.last_sync ?? 'never'} mono />
+        </div>
         <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => setupObsidianMut.mutate()}
+            disabled={setupObsidianMut.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            style={{ background: 'var(--accent)', color: 'white' }}
+          >
+            <ExternalLink size={14} />
+            {setupObsidianMut.isPending ? 'Opening...' : 'Create/Refresh & Open'}
+          </button>
+          <button
+            onClick={() => syncObsidianMut.mutate()}
+            disabled={syncObsidianMut.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50"
+            style={{ background: 'var(--raised)', borderColor: 'var(--border)', color: 'var(--text)' }}
+          >
+            <RefreshCw size={14} />
+            {syncObsidianMut.isPending ? 'Refreshing...' : 'Refresh Only'}
+          </button>
           <a
             href={api.exportVaultUrl()}
             download
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            style={{ background: 'var(--accent)', color: 'white' }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+            style={{ background: 'var(--raised)', borderColor: 'var(--border)', color: 'var(--text)' }}
           >
-            <Download size={14} /> Export full vault
+            <Download size={14} /> Download ZIP
           </a>
-          <div className="text-xs text-muted self-center">
-            Downloads as <code className="bg-raised px-1 rounded">mnemion_vault.zip</code>
+        </div>
+        {(setupObsidianMut.isError || syncObsidianMut.isError) && (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-red-400">
+            <AlertCircle size={12} /> Obsidian mirror action failed
           </div>
-        </div>
-        <div className="mt-3 text-xs text-faint">
-          Each drawer becomes a <code className="bg-raised px-1 rounded">.md</code> file with YAML frontmatter
-          (wing, room, agent, trust_status, confidence).
-          Wikilinks <code className="bg-raised px-1 rounded">[[entity]]</code> from Knowledge Graph entries are preserved.
-        </div>
+        )}
+        {obsidianStatus?.config_error && (
+          <div className="mt-3 flex items-center gap-1.5 text-xs text-amber-400">
+            <AlertCircle size={12} /> {obsidianStatus.config_error}
+          </div>
+        )}
       </Section>
 
       <Section title="MCP Hook" icon={Settings}>

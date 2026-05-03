@@ -95,15 +95,15 @@ def test_memory_guard_review_report_does_not_rescan_or_quarantine(collection, tm
     )
     guard = MemoryGuard(str(kg_path))
     scan = guard.scan_collection(collection, trust=trust, quarantine=False)
-    before_rows = sqlite3.connect(kg_path).execute(
-        "SELECT COUNT(*) FROM memory_guard_findings"
-    ).fetchone()[0]
+    before_rows = (
+        sqlite3.connect(kg_path).execute("SELECT COUNT(*) FROM memory_guard_findings").fetchone()[0]
+    )
 
     report = generate_review_report(str(kg_path), collection, str(tmp_path / "review"))
 
-    after_rows = sqlite3.connect(kg_path).execute(
-        "SELECT COUNT(*) FROM memory_guard_findings"
-    ).fetchone()[0]
+    after_rows = (
+        sqlite3.connect(kg_path).execute("SELECT COUNT(*) FROM memory_guard_findings").fetchone()[0]
+    )
     assert scan["flagged"] == 1
     assert before_rows == after_rows == 1
     assert trust.get("drawer_secret")["status"] == "current"
@@ -117,6 +117,4 @@ def test_memory_guard_review_report_does_not_rescan_or_quarantine(collection, tm
     assert rows[0]["room"] == "security"
     assert "token=[REDACTED]" in rows[0]["redacted_snippet"]
     assert "abc123supersecret" not in rows[0]["redacted_snippet"]
-    assert "Action taken: report only" in open(
-        report["markdown_path"], encoding="utf-8"
-    ).read()
+    assert "Action taken: report only" in open(report["markdown_path"], encoding="utf-8").read()

@@ -73,8 +73,7 @@ def _score_cases(cases: list[dict[str, Any]]) -> dict[str, float]:
     if not cases:
         return {mode: 0.0 for mode in _MODES}
     return {
-        mode: sum(1 for case in cases if case["passed"].get(mode)) / len(cases)
-        for mode in _MODES
+        mode: sum(1 for case in cases if case["passed"].get(mode)) / len(cases) for mode in _MODES
     }
 
 
@@ -238,8 +237,7 @@ def run_moat_eval(suite: str = "all", kg_path: str | None = None) -> dict[str, A
         base_path = kg_path or str(Path(temp_dir.name) / "moat_eval.sqlite3")
         multi_suite = len(suites) > 1
         cases = {
-            name: _RUNNERS[name](_suite_db_path(base_path, name, multi_suite))
-            for name in suites
+            name: _RUNNERS[name](_suite_db_path(base_path, name, multi_suite)) for name in suites
         }
         return {
             "suite": suite,

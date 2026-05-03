@@ -14,6 +14,7 @@ DEFAULT_BACKEND = "chroma"
 DEFAULT_EMBEDDING_DEVICE = "auto"
 DEFAULT_ENTITY_LANGUAGES = ("en",)
 DEFAULT_TOPIC_TUNNEL_MIN_COUNT = 2
+DEFAULT_OBSIDIAN_VAULT_PATH = os.path.expanduser("~/.mnemion/obsidian-vault")
 
 # hnsw:space=cosine is required because searcher.py computes
 # similarity = 1 - distance, which only yields a meaningful score in [0, 1]
@@ -135,7 +136,9 @@ class MnemionConfig:
     @property
     def backend(self):
         """Storage backend name."""
-        return os.environ.get("MNEMION_BACKEND") or self._file_config.get("backend", DEFAULT_BACKEND)
+        return os.environ.get("MNEMION_BACKEND") or self._file_config.get(
+            "backend", DEFAULT_BACKEND
+        )
 
     @property
     def embedding_device(self):
@@ -168,6 +171,15 @@ class MnemionConfig:
         if raw is None:
             raw = self._file_config.get("topic_tunnel_min_count", DEFAULT_TOPIC_TUNNEL_MIN_COUNT)
         return int(raw)
+
+    @property
+    def obsidian_vault_path(self):
+        """Path to Mnemion's owned Obsidian Markdown mirror."""
+        return (
+            os.environ.get("MNEMION_OBSIDIAN_VAULT_PATH")
+            or self._file_config.get("obsidian_vault_path")
+            or DEFAULT_OBSIDIAN_VAULT_PATH
+        )
 
     @property
     def people_map(self):
@@ -247,6 +259,7 @@ class MnemionConfig:
                 "embedding_device": DEFAULT_EMBEDDING_DEVICE,
                 "entity_languages": list(DEFAULT_ENTITY_LANGUAGES),
                 "topic_tunnel_min_count": DEFAULT_TOPIC_TUNNEL_MIN_COUNT,
+                "obsidian_vault_path": DEFAULT_OBSIDIAN_VAULT_PATH,
                 "topic_wings": DEFAULT_TOPIC_WINGS,
                 "hall_keywords": DEFAULT_HALL_KEYWORDS,
             }

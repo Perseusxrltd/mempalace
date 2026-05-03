@@ -1,4 +1,4 @@
-import type { AgentsResponse, ConnectorStatus, DrawerDetail, DrawerSummary, KGGraph, RecentDrawer, SearchHit, Status, StudioConfig, Taxonomy, TrustStats } from '../types'
+import type { AgentsResponse, ConnectorStatus, DrawerDetail, DrawerSummary, KGGraph, ObsidianStatus, RecentDrawer, SearchHit, Status, StudioConfig, Taxonomy, TrustStats } from '../types'
 
 declare global {
   interface Window {
@@ -141,6 +141,12 @@ export const api = {
 
   updateLLM: (body: { backend: string; url?: string; model?: string; api_key?: string }) =>
     put('/config/llm', body),
+
+  obsidianStatus: (): Promise<ObsidianStatus> => get('/obsidian/status'),
+
+  syncObsidian: (): Promise<Record<string, unknown>> => post('/obsidian/sync'),
+
+  openObsidian: (): Promise<Record<string, unknown>> => post('/obsidian/open'),
 
   // Vault export — download as zip
   exportVaultUrl: (wing?: string) => {

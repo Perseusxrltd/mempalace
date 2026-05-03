@@ -3,6 +3,15 @@ import pytest
 from mnemion import cli
 
 
+class FakeCollection:
+    def get(self, **kwargs):
+        return {
+            "ids": ["drawer_one"],
+            "documents": ["Obsidian mirror dry run content."],
+            "metadatas": [{"wing": "project", "room": "notes"}],
+        }
+
+
 def test_cli_version_flag(capsys, monkeypatch):
     monkeypatch.setattr("sys.argv", ["mnemion", "--version"])
 
@@ -36,3 +45,36 @@ def test_configure_stdio_reconfigures_streams(monkeypatch):
         {"encoding": "utf-8", "errors": "replace"},
         {"encoding": "utf-8", "errors": "replace"},
     ]
+
+
+def test_cli_obsidian_status_uses_configured_vault(capsys, monkeypatch, tmp_path):
+    vault = tmp_path / "vault"
+    monkeypatch.setenv("MNEMION_OBSIDIAN_VAULT_PATH", str(vault))
+    monkeypatch.setattr("sys.argv", ["mnemion", "obsidian", "status"])
+
+    cli.main()
+
+    out = capsys.readouterr().out
+    assert "Obsidian Mirror" in out
+    assert str(vault) in out
+
+
+def test_cli_obsidian_sync_dry_run_does_not_write(capsys, monkeypatch, tmp_path):
+    vault = tmp_path / "vault"
+    monkeypatch.setattr(
+        cli,
+        "_obsidian_collection_and_db",
+        lambda _args: (FakeCollection(), tmp_path / "missing.sqlite3"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["mnemion", "obsidian", "sync", "--vault", str(vault), "--dry-run"],
+    )
+
+    cli.main()
+
+    out = capsys.readouterr().out.lower()
+    assert "dry_run" in out
+    assert "would_write_files" in out
+    assert not vault.exists()

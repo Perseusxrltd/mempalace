@@ -867,9 +867,7 @@ def _build_patterns(name: str) -> dict:
             re.compile(p.format(name=n), re.MULTILINE | re.IGNORECASE) for p in DIALOGUE_PATTERNS
         ],
         "person_verbs": [re.compile(p.format(name=n), re.IGNORECASE) for p in person_patterns],
-        "project_verbs": [
-            re.compile(p.format(name=n), re.IGNORECASE) for p in project_patterns
-        ],
+        "project_verbs": [re.compile(p.format(name=n), re.IGNORECASE) for p in project_patterns],
         "direct": re.compile(rf"\bhey\s+{n}\b|\bthanks?\s+{n}\b|\bhi\s+{n}\b", re.IGNORECASE),
         "versioned": re.compile(rf"\b{n}[-v]\w+", re.IGNORECASE),
         "code_ref": re.compile(rf"\b{n}\.(py|js|ts|yaml|yml|json|sh)\b", re.IGNORECASE),

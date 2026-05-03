@@ -35,6 +35,14 @@ from pydantic import BaseModel  # noqa: E402
 from mnemion.config import DRAWER_HNSW_METADATA, MnemionConfig  # noqa: E402
 from mnemion.hybrid_searcher import HybridSearcher  # noqa: E402
 from mnemion.knowledge_graph import KnowledgeGraph  # noqa: E402
+from mnemion.obsidian import (  # noqa: E402
+    ObsidianSafetyError,
+    export_obsidian_zip as obsidian_export_zip,
+    open_obsidian_vault as obsidian_open_vault,
+    register_obsidian_vault as obsidian_register_vault,
+    sync_obsidian_vault as obsidian_sync_vault,
+    vault_status as obsidian_vault_status,
+)
 from mnemion.trust_lifecycle import DrawerTrust  # noqa: E402
 from mnemion.version import __version__  # noqa: E402
 from . import connectors as _connectors  # noqa: E402
@@ -96,6 +104,14 @@ def _get_collection() -> chromadb.Collection:
                 _config.collection_name, metadata=DRAWER_HNSW_METADATA
             )
     return _collection
+
+
+def _obsidian_vault_path() -> Path:
+    return Path(_config.obsidian_vault_path).expanduser()
+
+
+def _obsidian_kg_path() -> Path:
+    return Path(_config.anaktoron_path).expanduser().parent / "knowledge_graph.sqlite3"
 
 
 def _iter_metadatas(col, where=None, limit=None):
@@ -584,69 +600,64 @@ def uninstall_connector(conn_id: str):
     return result
 
 
-# ── Vault export (Obsidian-compatible) ───────────────────────────────────────
+# ── Obsidian owned mirror ────────────────────────────────────────────────────
+
+
+@app.get("/api/obsidian/status")
+def get_obsidian_status():
+    """Report owned Obsidian mirror path, manifest, and registration state."""
+    return obsidian_vault_status(_obsidian_vault_path())
+
+
+@app.post("/api/obsidian/sync")
+def sync_obsidian_mirror():
+    """Create or refresh the owned Obsidian Markdown mirror."""
+    try:
+        return obsidian_sync_vault(
+            _obsidian_vault_path(),
+            _get_collection(),
+            _obsidian_kg_path(),
+        )
+    except ObsidianSafetyError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+@app.post("/api/obsidian/open")
+def open_obsidian_mirror():
+    """Open the owned Obsidian mirror using the obsidian:// URI fallback."""
+    try:
+        vault = _obsidian_vault_path()
+        registration = obsidian_register_vault(vault)
+        open_result = obsidian_open_vault(vault)
+        return {**open_result, "registration": registration}
+    except Exception as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+# ── Vault export (Obsidian-compatible ZIP) ───────────────────────────────────
 
 
 @app.get("/api/export/vault")
 def export_vault(wing: Optional[str] = Query(None)):
-    """Export drawers as Obsidian-compatible Markdown files in a streamed ZIP archive."""
+    """Export the same Obsidian-compatible Markdown mirror as a streamed ZIP."""
     import tempfile
-    import zipfile
-    import re
     import os as _os
     from fastapi.responses import FileResponse
     from starlette.background import BackgroundTask
 
-    # Write to a temp file (not BytesIO) so large vaults don't blow up memory.
-    # The temp file is unlinked after the response finishes streaming.
     tmp = tempfile.NamedTemporaryFile(prefix="mnemion_vault_", suffix=".zip", delete=False)
     tmp_path = tmp.name
     tmp.close()
 
     try:
-        col = _get_collection()
-        PAGE = 500
-        offset = 0
-        with zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            while True:
-                try:
-                    res = col.get(
-                        limit=PAGE,
-                        offset=offset,
-                        where={"wing": wing} if wing else None,
-                        include=["metadatas", "documents"],
-                    )
-                except Exception:
-                    break
-                if not res or not res.get("ids"):
-                    break
-                ids = res["ids"]
-                metas = res.get("metadatas") or [{}] * len(ids)
-                docs = res.get("documents") or [""] * len(ids)
-                for did, meta, doc in zip(ids, metas, docs):
-                    meta = meta or {}
-                    w = meta.get("wing", "unknown")
-                    r = meta.get("room", "misc")
-                    fm_lines = ["---"]
-                    fm_lines.append(f'id: "{did}"')
-                    fm_lines.append(f'wing: "{w}"')
-                    fm_lines.append(f'room: "{r}"')
-                    for k in ("agent", "session_id", "trust_status", "created_at", "filed_at"):
-                        if meta.get(k):
-                            fm_lines.append(f'{k}: "{meta[k]}"')
-                    if meta.get("confidence") is not None:
-                        fm_lines.append(f"confidence: {meta['confidence']}")
-                    fm_lines.append("---")
-                    fm_lines.append("")
-                    fm_lines.append(doc or "")
-                    content = "\n".join(fm_lines)
-                    safe_id = re.sub(r"[^\w\-]", "_", did[:32])
-                    path = f"{w}/{r}/{safe_id}.md"
-                    zf.writestr(path, content)
-                if len(ids) < PAGE:
-                    break
-                offset += PAGE
-
+        obsidian_export_zip(
+            tmp_path,
+            _get_collection(),
+            _obsidian_kg_path(),
+            wing=wing,
+        )
         fname = f"mnemion_vault{'_' + wing if wing else ''}.zip"
 
         def _cleanup(path: str):

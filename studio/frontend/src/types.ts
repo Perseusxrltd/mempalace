@@ -127,6 +127,22 @@ export interface StudioConfig {
   topic_wings: string[]
 }
 
+export interface ObsidianStatus {
+  vault_path: string
+  exists: boolean
+  manifest_path: string
+  managed: boolean
+  last_sync?: string | null
+  file_count: number
+  drawer_count: number
+  wing_count: number
+  room_count: number
+  obsidian_config_path?: string | null
+  obsidian_config_detected: boolean
+  registered: boolean
+  config_error?: string | null
+}
+
 export interface RecentDrawer {
   id: string
   wing: string

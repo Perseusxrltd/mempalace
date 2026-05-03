@@ -20,7 +20,7 @@ Inspired by the original mempal project. Built far beyond it.
 
 <br>
 
-[Architecture](#architecture-layers) · [Quick Start](#quick-start) · [Moat](docs/moat.md) · [MCP Tools](#mcp-tools) · [Studio](#studio--connect-agents) · [System Prompt](#behavioral-protocol-bootstrap-system_promptmd--mcp-prompts) · [Auto-Save Hooks](#auto-save-hooks) · [Librarian](#6-librarian--daily-background-tidy-up-librarianpy) · [Anaktoron Sync](#anaktoron-sync) · [Benchmarks](#benchmarks) · [Changelog](#changelog)
+[Architecture](#architecture-layers) · [Quick Start](#quick-start) · [Moat](docs/moat.md) · [Obsidian](#10-obsidian-owned-mirror-obsidianpy) · [MCP Tools](#mcp-tools) · [Studio](#studio--connect-agents) · [System Prompt](#behavioral-protocol-bootstrap-system_promptmd--mcp-prompts) · [Auto-Save Hooks](#auto-save-hooks) · [Librarian](#6-librarian--daily-background-tidy-up-librarianpy) · [Anaktoron Sync](#anaktoron-sync) · [Benchmarks](#benchmarks) · [Changelog](#changelog)
 
 </div>
 
@@ -179,6 +179,20 @@ mnemion eval moat --suite all
 
 For the design thesis and operational workflow, see [docs/moat.md](docs/moat.md).
 
+### 10. Obsidian Owned Mirror (`obsidian.py`)
+
+Mnemion can project the full Anaktoron architecture into an Obsidian vault without making Obsidian the database. The mirror is one-way and Mnemion-owned: Chroma, SQLite trust state, the knowledge graph, cognitive units, and memory-guard findings remain canonical.
+
+```bash
+mnemion obsidian status
+mnemion obsidian setup --dry-run
+mnemion obsidian setup
+mnemion obsidian sync
+mnemion obsidian open
+```
+
+Default vault: `~/.mnemion/obsidian-vault`, configurable with `obsidian_vault_path` or `MNEMION_OBSIDIAN_VAULT_PATH`. The mirror writes `Mnemion.md`, wing/room indexes, drawer notes, trust pages, entity pages, `_Mnemion/Cognitive Graph.md`, `_Mnemion/Memory Guard.md`, and a managed `.mnemion-obsidian-manifest.json`. It refuses to sync into a non-empty unmanaged folder unless `--force-existing` is explicit, and pruning is limited to files from the previous manifest.
+
 ---
 
 ## Quick Start
@@ -255,6 +269,9 @@ mnemion eval moat --suite all
 # Repair storage metadata and Chroma max_seq_id issues
 mnemion repair --mode status
 mnemion repair --mode max-seq-id --dry-run
+
+# Create or refresh the one-way Obsidian mirror
+mnemion obsidian setup
 ```
 
 `mnemion sweep` accepts JSONL records shaped like Claude Code/Codex messages:
@@ -515,6 +532,12 @@ Mnemion began as a fork of mempalace, which introduced the memory Anaktoron meta
 ---
 
 ## Changelog
+
+### Unreleased — Obsidian owned mirror
+
+- Added `mnemion obsidian setup|sync|open|status` for a one-way Mnemion-owned Markdown mirror.
+- Studio Settings now creates, refreshes, opens, and ZIP-exports the same Obsidian-compatible mirror.
+- The exporter renders wing/room indexes, drawer notes, trust pages, entity pages, cognitive graph and memory-guard summaries, with manifest-limited pruning and safe Obsidian config registration.
 
 ### v3.5.5 — Live follow-up safety
 
